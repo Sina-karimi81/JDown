@@ -1,11 +1,11 @@
 package com.github.sinakarimi81.jdown.download;
 
+import com.github.sinakarimi81.jdown.common.HttpUtils;
 import com.github.sinakarimi81.jdown.dataObjects.Item;
 import com.github.sinakarimi81.jdown.dataObjects.Status;
-import com.github.sinakarimi81.jdown.db.ItemDAO;
 import com.github.sinakarimi81.jdown.exception.FileDataRequestFailedException;
 
-import java.lang.ref.PhantomReference;
+import java.io.*;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -20,14 +20,14 @@ public class ItemManager {
 
     public Item createItem(String url, String savedAddress) throws FileDataRequestFailedException {
         Item downloadItem = new Item();
-        downloadItem.setDownloadAddress(url);
-        Optional<HttpResponse<String>> itemData = getItemData(url);
+        downloadItem.setDownloadUrl(url);
+        Optional<HttpResponse<byte[]>> itemData = getItemData(url);
 
         if (itemData.isPresent()) {
-            HttpResponse<String> headRequestResponse = itemData.get();
+            HttpResponse<byte[]> headRequestResponse = itemData.get();
 
             if (400 <= headRequestResponse.statusCode()) {
-                throw new FileDataRequestFailedException("HEAD request for fetching file data failed with status: " + headRequestResponse.statusCode() + "\nWith body of: " + headRequestResponse.body());
+                throw new FileDataRequestFailedException("HEAD request for fetching file data failed with status: " + headRequestResponse.statusCode());
             }
 
             Map<String, List<String>> headers = headRequestResponse.headers().map();
@@ -50,7 +50,7 @@ public class ItemManager {
             String fileName = getFileName(url, headers);
             downloadItem.setName(fileName);
             downloadItem.setStatus(Status.STOP);
-            downloadItem.setSavedAddress(savedAddress);
+            downloadItem.setSavePath(savedAddress);
         }
 
         return downloadItem;
@@ -67,8 +67,8 @@ public class ItemManager {
         }
     }
 
-    private Optional<HttpResponse<String>> getItemData(String fileUrl) {
-        HttpResponse<String> response;
+    private Optional<HttpResponse<byte[]>> getItemData(String fileUrl) throws FileDataRequestFailedException {
+        HttpResponse<byte[]> response;
         try {
             HttpClient client = HttpClient.newHttpClient();
 
@@ -77,12 +77,48 @@ public class ItemManager {
                     .method(HEAD_METHOD.getValue(), HttpRequest.BodyPublishers.noBody())
                     .build();
 
-            response = client.send(request, HttpResponse.BodyHandlers.ofString());
+            response = client.send(request, HttpResponse.BodyHandlers.ofByteArray());
         } catch (Exception e) {
-            throw new RuntimeException(e);
+            throw new FileDataRequestFailedException("Failed to fetch the requested file data", e);
         }
 
         return Optional.ofNullable(response);
+    }
+
+    public void download(Item item) throws FileDataRequestFailedException {
+        assert item != null : "Provided Item is null";
+        assert item.getDownloadUrl() != null && item.getSavePath() != null: "Provided Item with ID: " + item.getName() + " does not have a URL or Save address";
+
+        HttpClient client = HttpClient.newHttpClient();
+
+        HttpResponse<byte[]> response;
+        try {
+            HttpRequest request = HttpRequest
+                    .newBuilder(new URI(item.getDownloadUrl()))
+                    .method(GET_METHOD.getValue(), HttpRequest.BodyPublishers.noBody())
+                    .build();
+
+            response = client.send(request, HttpResponse.BodyHandlers.ofByteArray());
+        } catch (Exception e) {
+            item.setStatus(Status.ERROR);
+            throw new FileDataRequestFailedException("Failed to download the requested file: " + item.getName(), e);
+        }
+
+        if (HttpUtils.isStatusCode4xx(response) || HttpUtils.isStatusCode5xx(response)) {
+            item.setStatus(Status.ERROR);
+            throw new FileDataRequestFailedException("Failed to download file data with status code: " + response.statusCode());
+        }
+
+        try (FileOutputStream outputStream = new FileOutputStream(item.getSavePath() + "/" + item.getName());
+             BufferedOutputStream writer = new BufferedOutputStream(outputStream)) {
+
+            writer.write(response.body());
+        } catch (Exception e) {
+            item.setStatus(Status.ERROR);
+            throw new FileDataRequestFailedException("Failed to write the data into file: " + item.getName(), e);
+        }
+
+        item.setStatus(Status.COMPLETED);
     }
 
 }

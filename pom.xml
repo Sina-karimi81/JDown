@@ -20,6 +20,7 @@
         <lombok.version>1.18.30</lombok.version>
         <mokcito.version>5.11.0</mokcito.version>
         <mockito-jupiter.version>5.12.0</mockito-jupiter.version>
+        <assertj.version>3.27.2</assertj.version>
 
         <sqlite.version>3.49.1.0</sqlite.version>
     </properties>
@@ -110,6 +111,12 @@
             <groupId>org.mockito</groupId>
             <artifactId>mockito-junit-jupiter</artifactId>
             <version>${mockito-jupiter.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <version>${assertj.version}</version>
             <scope>test</scope>
         </dependency>
         <dependency>

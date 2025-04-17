@@ -13,8 +13,8 @@ public class Item {
     private String type;
     private Status status;
     private Long size;
-    private String savedAddress;
-    private String downloadAddress;
+    private String savePath;
+    private String downloadUrl;
     public Boolean isResumable;
 
 }
