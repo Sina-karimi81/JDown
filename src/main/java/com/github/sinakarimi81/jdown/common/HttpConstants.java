@@ -6,7 +6,7 @@ import lombok.Getter;
 public enum HttpConstants {
 
     ACCEPT_RANGES_HEADER("Accept-Ranges"),
-    RANGES("Ranges"),
+    RANGE("Range"),
     CONTENT_LENGTH_HEADER("Content-Length"),
     CONTENT_TYPE_HEADER("Content-Type"),
     CONTENT_DISPOSITION_HEADER("Content-Disposition"),

@@ -2,6 +2,7 @@ package com.github.sinakarimi81.jdown.download;
 
 import com.github.sinakarimi81.jdown.common.HttpUtils;
 import com.github.sinakarimi81.jdown.dataObjects.Item;
+import com.github.sinakarimi81.jdown.dataObjects.Range;
 import com.github.sinakarimi81.jdown.dataObjects.Status;
 import com.github.sinakarimi81.jdown.exception.FileDataRequestFailedException;
 
@@ -10,9 +11,11 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 
 import static com.github.sinakarimi81.jdown.common.HttpConstants.*;
 
@@ -34,7 +37,7 @@ public class ItemManager {
 
             List<String> acceptRanges = headers.get(ACCEPT_RANGES_HEADER.getValue());
             if (acceptRanges != null && !acceptRanges.isEmpty()) {
-                downloadItem.setIsResumable(true);
+                downloadItem.setResumable(true);
             }
 
             List<String> contentLength = headers.get(CONTENT_LENGTH_HEADER.getValue());
@@ -109,6 +112,12 @@ public class ItemManager {
             throw new FileDataRequestFailedException("Failed to download file data with status code: " + response.statusCode());
         }
 
+        saveToFile(item, response);
+
+        item.setStatus(Status.COMPLETED);
+    }
+
+    private static void saveToFile(Item item, HttpResponse<byte[]> response) throws FileDataRequestFailedException {
         try (FileOutputStream outputStream = new FileOutputStream(item.getSavePath() + "/" + item.getName());
              BufferedOutputStream writer = new BufferedOutputStream(outputStream)) {
 
@@ -117,8 +126,50 @@ public class ItemManager {
             item.setStatus(Status.ERROR);
             throw new FileDataRequestFailedException("Failed to write the data into file: " + item.getName(), e);
         }
+    }
 
-        item.setStatus(Status.COMPLETED);
+    public List<CompletableFuture<HttpResponse<byte[]>>> createAsyncRangeRequests(Item item) throws FileDataRequestFailedException {
+
+        List<CompletableFuture<HttpResponse<byte[]>>> result = new ArrayList<>();
+
+        List<Range> ranges = new ArrayList<>();
+        // todo: change the constant 10 to be read from user input or configuration
+        long interval = Math.floorDiv(item.getSize(), 10);
+        long start = -1;
+
+        while (start <= item.getSize()) {
+            long from = start + 1;
+            long to = start + interval;
+            ranges.add(new Range(from, to));
+            start = start + interval;
+        }
+
+        HttpClient client = HttpClient.newHttpClient();
+        try {
+            for (Range range: ranges) {
+
+                String rangeValues;
+                if (range.getTo() >= item.getSize()) {
+                    rangeValues = String.format("bytes=%d-", range.getFrom());
+                } else {
+                    rangeValues = String.format("bytes=%d-%d", range.getFrom(), range.getTo());
+                }
+
+                HttpRequest request = HttpRequest
+                        .newBuilder(new URI(item.getDownloadUrl()))
+                        .method(GET_METHOD.getValue(), HttpRequest.BodyPublishers.noBody())
+                        .header(RANGE.getValue(), rangeValues)
+                        .build();
+
+                CompletableFuture<HttpResponse<byte[]>> httpResponseCompletableFuture = client.sendAsync(request, HttpResponse.BodyHandlers.ofByteArray());
+                result.add(httpResponseCompletableFuture);
+            }
+        } catch (Exception e) {
+            item.setStatus(Status.ERROR);
+            throw new FileDataRequestFailedException("Failed to download the requested file: " + item.getName(), e);
+        }
+
+        return result;
     }
 
 }

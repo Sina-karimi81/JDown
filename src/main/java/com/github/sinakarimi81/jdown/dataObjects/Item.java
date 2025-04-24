@@ -15,6 +15,6 @@ public class Item {
     private Long size;
     private String savePath;
     private String downloadUrl;
-    public Boolean isResumable;
+    private Boolean resumable;
 
 }
