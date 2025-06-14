@@ -1,6 +1,7 @@
 package com.github.sinakarimi81.jdown.download;
 
 import com.github.sinakarimi81.jdown.common.HttpUtils;
+import com.github.sinakarimi81.jdown.configuration.ConfigurationUtils;
 import com.github.sinakarimi81.jdown.dataObjects.ItemInfo;
 import com.github.sinakarimi81.jdown.dataObjects.Range;
 import com.github.sinakarimi81.jdown.dataObjects.Status;
@@ -90,8 +91,9 @@ public class DownloadTask {
     private List<Range> createRanges(long size) {
         List<Range> ranges = new ArrayList<>();
 
-        // todo: change the constant 10 to be read from user input or configuration
-        int interval = (int) Math.floorDiv(size, 10);
+        Integer numberOfThreads = ConfigurationUtils.getConfig(ConfigurationUtils.ConfigurationConstants.NUMBER_OF_THREADS, Integer.class);
+
+        int interval = (int) Math.floorDiv(size, numberOfThreads);
         int start = 0;
 
         while (start < size) {

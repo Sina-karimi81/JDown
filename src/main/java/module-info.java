@@ -12,6 +12,7 @@ module com.github.sinakarimi81.jdown {
     requires static lombok;
     requires org.xerial.sqlitejdbc;
     requires org.slf4j;
+    requires com.fasterxml.jackson.databind;
 
     opens com.github.sinakarimi81.jdown to javafx.fxml;
     exports com.github.sinakarimi81.jdown;
