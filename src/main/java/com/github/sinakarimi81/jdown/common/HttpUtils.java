@@ -12,4 +12,8 @@ public class HttpUtils {
         return 500 <= response.statusCode();
     }
 
+    public static <T> boolean isStatusCode2xx(HttpResponse<T> response) {
+        return 200 <= response.statusCode() && response.statusCode() < 300;
+    }
+
 }

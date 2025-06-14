@@ -1,5 +1,6 @@
 package com.github.sinakarimi81.jdown.dataObjects;
 
+import com.github.sinakarimi81.jdown.download.DownloadTask;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -9,12 +10,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class Item {
 
-    private String name;
-    private String type;
-    private Status status;
-    private Long size;
-    private String savePath;
-    private String downloadUrl;
-    private Boolean resumable;
+    private ItemInfo itemInfo;
+    private DownloadTask downloadTask;
 
 }

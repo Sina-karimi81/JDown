@@ -9,7 +9,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class Range {
 
-    private long from;
-    private long to;
+    private int from;
+    private int to;
 
 }

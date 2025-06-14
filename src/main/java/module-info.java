@@ -11,6 +11,7 @@ module com.github.sinakarimi81.jdown {
     requires java.net.http;
     requires static lombok;
     requires org.xerial.sqlitejdbc;
+    requires org.slf4j;
 
     opens com.github.sinakarimi81.jdown to javafx.fxml;
     exports com.github.sinakarimi81.jdown;

@@ -1,21 +1,17 @@
 package com.github.sinakarimi81.jdown.download;
 
-import com.github.sinakarimi81.jdown.common.HttpUtils;
+import com.github.sinakarimi81.jdown.dataObjects.ItemInfo;
 import com.github.sinakarimi81.jdown.dataObjects.Item;
-import com.github.sinakarimi81.jdown.dataObjects.Range;
 import com.github.sinakarimi81.jdown.dataObjects.Status;
 import com.github.sinakarimi81.jdown.exception.FileDataRequestFailedException;
 
-import java.io.*;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.CompletableFuture;
 
 import static com.github.sinakarimi81.jdown.common.HttpConstants.*;
 
@@ -23,11 +19,12 @@ public class ItemManager {
 
     public Item createItem(String url, String savedAddress) throws FileDataRequestFailedException {
         Item downloadItem = new Item();
-        downloadItem.setDownloadUrl(url);
-        Optional<HttpResponse<byte[]>> itemData = getItemData(url);
+        ItemInfo itemInfo = new ItemInfo();
+        itemInfo.setDownloadUrl(url);
+        Optional<HttpResponse<Void>> itemData = getItemData(url);
 
         if (itemData.isPresent()) {
-            HttpResponse<byte[]> headRequestResponse = itemData.get();
+            HttpResponse<Void> headRequestResponse = itemData.get();
 
             if (400 <= headRequestResponse.statusCode()) {
                 throw new FileDataRequestFailedException("HEAD request for fetching file data failed with status: " + headRequestResponse.statusCode());
@@ -37,24 +34,25 @@ public class ItemManager {
 
             List<String> acceptRanges = headers.get(ACCEPT_RANGES_HEADER.getValue());
             if (acceptRanges != null && !acceptRanges.isEmpty()) {
-                downloadItem.setResumable(true);
+                itemInfo.setResumable(true);
             }
 
             List<String> contentLength = headers.get(CONTENT_LENGTH_HEADER.getValue());
             if (contentLength != null && !contentLength.isEmpty()) {
-                downloadItem.setSize(Long.valueOf(contentLength.get(0)));
+                itemInfo.setSize(Long.valueOf(contentLength.get(0)));
             }
 
             List<String> contentType = headers.get(CONTENT_TYPE_HEADER.getValue());
             if (contentType != null && !contentType.isEmpty()) {
-                downloadItem.setType(contentType.get(0));
+                itemInfo.setType(contentType.get(0));
             }
 
             String fileName = getFileName(url, headers);
-            downloadItem.setName(fileName);
-            downloadItem.setStatus(Status.STOP);
-            downloadItem.setSavePath(savedAddress);
+            itemInfo.setName(fileName);
+            itemInfo.setStatus(Status.STOP);
+            itemInfo.setSavePath(savedAddress);
         }
+        downloadItem.setItemInfo(itemInfo);
 
         return downloadItem;
     }
@@ -70,8 +68,8 @@ public class ItemManager {
         }
     }
 
-    private Optional<HttpResponse<byte[]>> getItemData(String fileUrl) throws FileDataRequestFailedException {
-        HttpResponse<byte[]> response;
+    private Optional<HttpResponse<Void>> getItemData(String fileUrl) throws FileDataRequestFailedException {
+        HttpResponse<Void> response;
         try {
             HttpClient client = HttpClient.newHttpClient();
 
@@ -80,96 +78,12 @@ public class ItemManager {
                     .method(HEAD_METHOD.getValue(), HttpRequest.BodyPublishers.noBody())
                     .build();
 
-            response = client.send(request, HttpResponse.BodyHandlers.ofByteArray());
+            response = client.send(request, HttpResponse.BodyHandlers.discarding());
         } catch (Exception e) {
             throw new FileDataRequestFailedException("Failed to fetch the requested file data", e);
         }
 
         return Optional.ofNullable(response);
-    }
-
-    public void download(Item item) throws FileDataRequestFailedException {
-        assert item != null : "Provided Item is null";
-        assert item.getDownloadUrl() != null && item.getSavePath() != null: "Provided Item with ID: " + item.getName() + " does not have a URL or Save address";
-
-        HttpClient client = HttpClient.newHttpClient();
-
-        HttpResponse<byte[]> response;
-        try {
-            HttpRequest request = HttpRequest
-                    .newBuilder(new URI(item.getDownloadUrl()))
-                    .method(GET_METHOD.getValue(), HttpRequest.BodyPublishers.noBody())
-                    .build();
-
-            response = client.send(request, HttpResponse.BodyHandlers.ofByteArray());
-        } catch (Exception e) {
-            item.setStatus(Status.ERROR);
-            throw new FileDataRequestFailedException("Failed to download the requested file: " + item.getName(), e);
-        }
-
-        if (HttpUtils.isStatusCode4xx(response) || HttpUtils.isStatusCode5xx(response)) {
-            item.setStatus(Status.ERROR);
-            throw new FileDataRequestFailedException("Failed to download file data with status code: " + response.statusCode());
-        }
-
-        saveToFile(item, response);
-
-        item.setStatus(Status.COMPLETED);
-    }
-
-    private static void saveToFile(Item item, HttpResponse<byte[]> response) throws FileDataRequestFailedException {
-        try (FileOutputStream outputStream = new FileOutputStream(item.getSavePath() + "/" + item.getName());
-             BufferedOutputStream writer = new BufferedOutputStream(outputStream)) {
-
-            writer.write(response.body());
-        } catch (Exception e) {
-            item.setStatus(Status.ERROR);
-            throw new FileDataRequestFailedException("Failed to write the data into file: " + item.getName(), e);
-        }
-    }
-
-    public List<CompletableFuture<HttpResponse<byte[]>>> createAsyncRangeRequests(Item item) throws FileDataRequestFailedException {
-
-        List<CompletableFuture<HttpResponse<byte[]>>> result = new ArrayList<>();
-
-        List<Range> ranges = new ArrayList<>();
-        // todo: change the constant 10 to be read from user input or configuration
-        long interval = Math.floorDiv(item.getSize(), 10);
-        long start = -1;
-
-        while (start <= item.getSize()) {
-            long from = start + 1;
-            long to = start + interval;
-            ranges.add(new Range(from, to));
-            start = start + interval;
-        }
-
-        HttpClient client = HttpClient.newHttpClient();
-        try {
-            for (Range range: ranges) {
-
-                String rangeValues;
-                if (range.getTo() >= item.getSize()) {
-                    rangeValues = String.format("bytes=%d-", range.getFrom());
-                } else {
-                    rangeValues = String.format("bytes=%d-%d", range.getFrom(), range.getTo());
-                }
-
-                HttpRequest request = HttpRequest
-                        .newBuilder(new URI(item.getDownloadUrl()))
-                        .method(GET_METHOD.getValue(), HttpRequest.BodyPublishers.noBody())
-                        .header(RANGE.getValue(), rangeValues)
-                        .build();
-
-                CompletableFuture<HttpResponse<byte[]>> httpResponseCompletableFuture = client.sendAsync(request, HttpResponse.BodyHandlers.ofByteArray());
-                result.add(httpResponseCompletableFuture);
-            }
-        } catch (Exception e) {
-            item.setStatus(Status.ERROR);
-            throw new FileDataRequestFailedException("Failed to download the requested file: " + item.getName(), e);
-        }
-
-        return result;
     }
 
 }
