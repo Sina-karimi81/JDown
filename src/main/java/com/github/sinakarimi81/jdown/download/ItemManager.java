@@ -49,7 +49,7 @@ public class ItemManager {
 
             String fileName = getFileName(url, headers);
             itemInfo.setName(fileName);
-            itemInfo.setStatus(Status.STOP);
+            itemInfo.setStatus(Status.PAUSED);
             itemInfo.setSavePath(savedAddress);
         }
         downloadItem.setItemInfo(itemInfo);

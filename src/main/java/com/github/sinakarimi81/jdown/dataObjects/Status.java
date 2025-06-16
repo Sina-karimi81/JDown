@@ -2,9 +2,10 @@ package com.github.sinakarimi81.jdown.dataObjects;
 
 public enum Status {
 
-    STOP,
+    PAUSED,
     IN_PROGRESS,
     COMPLETED,
+    CANCELED,
     ERROR
 
 }

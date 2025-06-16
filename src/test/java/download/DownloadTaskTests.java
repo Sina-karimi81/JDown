@@ -15,6 +15,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
 import org.mockito.Mock;
+import org.mockito.Mockito;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.io.File;
@@ -26,16 +28,14 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.stream.Stream;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.*;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 public class DownloadTaskTests {
@@ -59,111 +59,11 @@ public class DownloadTaskTests {
     Path tempDir;
 
     @Test
-    void saveToArray_ShouldHandleSuccessfulResponse(@Mock HttpResponse<byte[]> response) throws Exception {
-        // Arrange
-
-        DownloadTask downloadTask = new DownloadTask(72);
-        Path path = Path.of("src/test/resources/testFile.txt");
-        byte[] output = Files.readAllBytes(path);
-
-        byte[] responseData = Arrays.copyOfRange(output, 0, 8);
-        Range testRange = new Range(0, 8);
-
-        when(response.body()).thenReturn(responseData);
-        when(response.statusCode()).thenReturn(206); // Partial Content
-
-        try {
-            // Use reflection to test private method
-            java.lang.reflect.Method saveToArrayMethod = DownloadTask.class.getDeclaredMethod("saveToArray", Range.class, HttpResponse.class);
-            saveToArrayMethod.setAccessible(true);
-
-            // Act
-            assertDoesNotThrow(() -> saveToArrayMethod.invoke(downloadTask, testRange, response));
-        } catch (Exception e) {
-            fail("test failed because of exception", e);
-        }
-    }
-
-    @Test
-    void saveToArray_ShouldThrowExceptionOnBadStatusCode(@Mock HttpResponse<byte[]> response) throws Exception {
-        // Arrange
-        DownloadTask downloadTask = new DownloadTask(72);
-        Range testRange = new Range(0, 10);
-        when(response.statusCode()).thenReturn(404);
-
-        try {
-
-            // Use reflection to test private method
-            java.lang.reflect.Method saveToArrayMethod = DownloadTask.class
-                    .getDeclaredMethod("saveToArray", Range.class, HttpResponse.class);
-            saveToArrayMethod.setAccessible(true);
-
-            // Act & Assert
-            Exception exception = assertThrows(Exception.class, () -> {
-                saveToArrayMethod.invoke(downloadTask, testRange, response);
-            });
-
-            assertInstanceOf(DownloadFailedException.class, exception.getCause());
-        } catch (Exception e) {
-            fail("test failed because of exception", e);
-        }
-    }
-
-    @Test
-    void saveToFile_ShouldCreateFileSuccessfully(@Mock ItemInfo mockItemInfo) throws Exception {
-        // Arrange
-        String savePath = tempDir.toString();
-        DownloadTask downloadTask = new DownloadTask(72);
-        Path path = Path.of("src/test/resources/testFile.txt");
-        byte[] output = Files.readAllBytes(path);
-
-        when(mockItemInfo.getSavePath()).thenReturn(savePath);
-        when(mockItemInfo.getName()).thenReturn("resultTestFile.txt");
-
-        // Use reflection to test private method
-        java.lang.reflect.Method saveToFileMethod = DownloadTask.class
-                .getDeclaredMethod("saveToFile", ItemInfo.class, byte[].class);
-        saveToFileMethod.setAccessible(true);
-
-        // Act
-        assertDoesNotThrow(() -> saveToFileMethod.invoke(downloadTask, mockItemInfo, output));
-
-        // Assert
-        File createdFile = new File(savePath, "resultTestFile.txt");
-        assertTrue(createdFile.exists());
-        assertEquals(output.length, createdFile.length());
-        verify(mockItemInfo).setStatus(Status.COMPLETED);
-
-        // Verify file content
-        byte[] fileContent = Files.readAllBytes(createdFile.toPath());
-        assertArrayEquals(output, fileContent);
-    }
-
-    @Test
-    void saveToFile_ShouldSetErrorStatusOnIOException(@Mock ItemInfo mockItemInfo) throws Exception {
-        // Arrange
-        DownloadTask downloadTask = new DownloadTask(72);
-        String invalidPath = "/invalid/path/that/does/not/exist";
-        byte[] testData = "test data".getBytes();
-
-        when(mockItemInfo.getSavePath()).thenReturn(invalidPath);
-        when(mockItemInfo.getName()).thenReturn("resultTestFile.txt");
-
-        // Use reflection to test private method
-        java.lang.reflect.Method saveToFileMethod = DownloadTask.class
-                .getDeclaredMethod("saveToFile", ItemInfo.class, byte[].class);
-        saveToFileMethod.setAccessible(true);
-
-        // Act & Assert
-        Exception exception = assertThrows(Exception.class, () -> saveToFileMethod.invoke(downloadTask, mockItemInfo, testData));
-
-        assertInstanceOf(DownloadFailedException.class, exception.getCause());
-        verify(mockItemInfo).setStatus(Status.ERROR);
-    }
-
-    @Test
     void createRanges_ShouldCreateCorrectRangePartitions() throws Exception {
-        DownloadTask downloadTask = new DownloadTask(72);
+        Item item = new Item();
+        ItemInfo info = new ItemInfo("downloadedTestFile.txt", "application/octet-stream", Status.PAUSED, 72L, tempDir.toString(), "http://localhost:9090/testFile.txt", true);
+        item.setItemInfo(info);
+        DownloadTask downloadTask = new DownloadTask(item.getItemInfo());
 
         java.lang.reflect.Method createRangesMethod = DownloadTask.class
                 .getDeclaredMethod("createRanges", long.class);
@@ -181,9 +81,9 @@ public class DownloadTaskTests {
         byte[] output = Files.readAllBytes(path);
 
         Item item = new Item();
-        ItemInfo info = new ItemInfo("downloadedTestFile.txt", "application/octet-stream", Status.STOP, 72L, tempDir.toString(), "http://localhost:9090/testFile.txt", true);
+        ItemInfo info = new ItemInfo("downloadedTestFile.txt", "application/octet-stream", Status.PAUSED, 72L, tempDir.toString(), "http://localhost:9090/testFile.txt", true);
         item.setItemInfo(info);
-        DownloadTask downloadTask = new DownloadTask(72);
+        DownloadTask downloadTask = new DownloadTask(item.getItemInfo());
 
         List<Range> ranges = createRanges(info.getSize(), downloadTask);
         Map<String, byte[]> data = getStringMap(output, ranges, 72);
@@ -204,12 +104,12 @@ public class DownloadTaskTests {
             index++;
         }
 
-        CompletableFuture<Void> asyncRangeRequests = downloadTask.createAsyncRangeRequests(item.getItemInfo());
+        downloadTask.start();
 
         File f = new File(info.getSavePath() + "/" + item.getItemInfo().getName());
 
         try (Stream<String> lines = Files.lines(path)) {
-            asyncRangeRequests.get(10000, TimeUnit.MILLISECONDS);
+            downloadTask.waitForDuration(10000);
             assertThat(Files.lines(f.toPath()))
                     .containsExactly(lines.toList().toArray(String[]::new));
             assertTrue(f.delete());
@@ -217,6 +117,139 @@ public class DownloadTaskTests {
         } catch (Exception e) {
             fail("test failed because an exception occurred", e);
         }
+    }
+
+    @Test
+    public void Given_DownloadItem_When_Paused_Expect_DownloadToBePaused() throws IOException, InterruptedException, ExecutionException, TimeoutException {
+        Path path = Path.of("src/test/resources/testFile.txt");
+        byte[] output = Files.readAllBytes(path);
+
+        Item item = new Item();
+        ItemInfo info = new ItemInfo("downloadedTestFile.txt", "application/octet-stream", Status.PAUSED, 72L, tempDir.toString(), "http://localhost:9090/testFile.txt", true);
+        item.setItemInfo(info);
+        DownloadTask downloadTask = new DownloadTask(item.getItemInfo());
+
+        List<Range> ranges = createRanges(info.getSize(), downloadTask);
+        Map<String, byte[]> data = getStringMap(output, ranges, 72);
+
+        int index = 1;
+        for (Range range : ranges) {
+            String rangeValues;
+            if (range.getTo() >= info.getSize()) {
+                rangeValues = String.format("bytes=%d-", range.getFrom());
+            } else {
+                rangeValues = String.format("bytes=%d-%d", range.getFrom(), range.getTo());
+            }
+
+            stubFor(get(urlEqualTo("/testFile.txt"))
+                    .withHeader(HttpConstants.RANGE.getValue(), equalTo(rangeValues))
+                    .willReturn(aResponse().withBody(data.get("bytes" + index)).withStatus(206))
+            );
+            index++;
+        }
+
+        downloadTask.start();
+        downloadTask.pause();
+
+        File f = new File(info.getSavePath() + "/" + item.getItemInfo().getName());
+        assertEquals(Status.PAUSED, item.getItemInfo().getStatus());
+        assertTrue(downloadTask.isPaused());
+        assertFalse(f.exists());
+
+    }
+
+    @Test
+    public void Given_DownloadItem_When_Paused_Then_Resumed_Expect_DownloadToComplete() throws IOException, InterruptedException, ExecutionException {
+        Path path = Path.of("src/test/resources/testFile.txt");
+        byte[] output = Files.readAllBytes(path);
+
+        Item item = new Item();
+        ItemInfo info = new ItemInfo("downloadedTestFile.txt", "application/octet-stream", Status.PAUSED, 72L, tempDir.toString(), "http://localhost:9090/testFile.txt", true);
+        item.setItemInfo(info);
+        DownloadTask downloadTask = new DownloadTask(item.getItemInfo());
+
+        List<Range> ranges = createRanges(info.getSize(), downloadTask);
+        Map<String, byte[]> data = getStringMap(output, ranges, 72);
+
+        int index = 1;
+        for (Range range : ranges) {
+            String rangeValues;
+            if (range.getTo() >= info.getSize()) {
+                rangeValues = String.format("bytes=%d-", range.getFrom());
+            } else {
+                rangeValues = String.format("bytes=%d-%d", range.getFrom(), range.getTo());
+            }
+
+            stubFor(get(urlEqualTo("/testFile.txt"))
+                    .withHeader(HttpConstants.RANGE.getValue(), equalTo(rangeValues))
+                    .willReturn(aResponse().withBody(data.get("bytes" + index)).withStatus(206))
+            );
+            index++;
+        }
+
+        downloadTask.start();
+
+        downloadTask.pause();
+
+        File f = new File(info.getSavePath() + "/" + item.getItemInfo().getName());
+        assertEquals(Status.PAUSED, item.getItemInfo().getStatus());
+        assertTrue(downloadTask.isPaused());
+        assertFalse(f.exists());
+
+        downloadTask.resume();
+        assertFalse(downloadTask.isPaused());
+
+        try (Stream<String> lines = Files.lines(path)) {
+            downloadTask.waitForDuration(10000);
+            assertThat(Files.lines(f.toPath()))
+                    .containsExactly(lines.toList().toArray(String[]::new));
+            assertTrue(f.delete());
+            assertEquals(Status.COMPLETED, item.getItemInfo().getStatus());
+        } catch (Exception e) {
+            fail("test failed because an exception occurred", e);
+        }
+    }
+
+    @Test
+    public void Given_DownloadItem_When_Cancelled_Expect_DownloadToBeCancelled() throws IOException, InterruptedException, ExecutionException, TimeoutException {
+        Path path = Path.of("src/test/resources/testFile.txt");
+        byte[] output = Files.readAllBytes(path);
+
+        Item item = new Item();
+        ItemInfo info = new ItemInfo("downloadedTestFile.txt", "application/octet-stream", Status.PAUSED, 72L, tempDir.toString(), "http://localhost:9090/testFile.txt", true);
+        item.setItemInfo(info);
+        DownloadTask downloadTask = new DownloadTask(item.getItemInfo());
+
+        List<Range> ranges = createRanges(info.getSize(), downloadTask);
+        Map<String, byte[]> data = getStringMap(output, ranges, 72);
+
+        int index = 1;
+        for (Range range : ranges) {
+            String rangeValues;
+            if (range.getTo() >= info.getSize()) {
+                rangeValues = String.format("bytes=%d-", range.getFrom());
+            } else {
+                rangeValues = String.format("bytes=%d-%d", range.getFrom(), range.getTo());
+            }
+
+            stubFor(get(urlEqualTo("/testFile.txt"))
+                    .withHeader(HttpConstants.RANGE.getValue(), equalTo(rangeValues))
+                    .willReturn(aResponse().withBody(data.get("bytes" + index)).withStatus(206))
+            );
+            index++;
+        }
+
+        downloadTask.start();
+
+        assertEquals(Status.IN_PROGRESS, item.getItemInfo().getStatus());
+
+        downloadTask.cancel();
+
+        File f = new File(info.getSavePath() + "/" + item.getItemInfo().getName());
+        assertEquals(Status.CANCELED, item.getItemInfo().getStatus());
+        assertTrue(downloadTask.isCancelled());
+        assertFalse(f.exists());
+
     }
 
     private static Map<String, byte[]> getStringMap(byte[] output, List<Range> ranges, int size) {

@@ -15,21 +15,13 @@ import org.mockito.MockedStatic;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.io.*;
-import java.net.URISyntaxException;
 import java.net.http.HttpClient;
 import java.net.http.HttpHeaders;
 import java.net.http.HttpResponse;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.Arrays;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -67,7 +59,7 @@ public class ItemMangerTests {
         assertEquals(fileUrl, info.getDownloadUrl());
         assertTrue(info.getResumable());
         assertEquals(71841045L, info.getSize());
-        assertEquals(Status.STOP, info.getStatus());
+        assertEquals(Status.PAUSED, info.getStatus());
     }
 
     @Test
@@ -89,7 +81,7 @@ public class ItemMangerTests {
         assertEquals(fileUrl, info.getDownloadUrl());
         assertTrue(info.getResumable());
         assertEquals(71841045L, info.getSize());
-        assertEquals(Status.STOP, info.getStatus());
+        assertEquals(Status.PAUSED, info.getStatus());
     }
 
     @Test
