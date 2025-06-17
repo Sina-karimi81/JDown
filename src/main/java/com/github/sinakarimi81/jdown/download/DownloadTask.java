@@ -17,7 +17,10 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.*;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 import static com.github.sinakarimi81.jdown.common.HttpConstants.GET_METHOD;
 import static com.github.sinakarimi81.jdown.common.HttpConstants.RANGE;
@@ -29,7 +32,7 @@ public class DownloadTask {
     private final ItemInfo itemInfo;
     private final byte[] data;
     private final Object lock = new Object();
-    private boolean isPaused = false;
+    private volatile boolean isPaused = false;
 
     public DownloadTask(ItemInfo itemInfo) {
         this.itemInfo = itemInfo;
@@ -107,11 +110,9 @@ public class DownloadTask {
                     rangeValues = String.format("bytes=%d-%d", range.getFrom(), range.getTo());
                 }
 
-                synchronized (lock) {
-                    while (isPaused) {
-                        log.info("inside the pause loop for item {}, isPaused: {}", itemInfo.getName(), isPaused);
-                        Thread.onSpinWait(); // just used for performance by the JVM, no additional functionality
-                    }
+                while (isPaused) {
+                    log.info("inside the pause loop for item {}, isPaused: {} Thread: {}", itemInfo.getName(), isPaused, Thread.currentThread().getName());
+                    Thread.onSpinWait(); // just used for performance by the JVM, no additional functionality
                 }
 
                 HttpClient client = HttpClient.newHttpClient();
