@@ -21,6 +21,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 import static com.github.sinakarimi81.jdown.common.HttpConstants.GET_METHOD;
 import static com.github.sinakarimi81.jdown.common.HttpConstants.RANGE;
@@ -31,7 +32,7 @@ public class DownloadTask {
     private CompletableFuture<Void> downloadTask;
     private final ItemInfo itemInfo;
     private final byte[] data;
-    private final Object lock = new Object();
+    private final ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
     private volatile boolean isPaused = false;
 
     public DownloadTask(ItemInfo itemInfo) {
@@ -52,17 +53,25 @@ public class DownloadTask {
     }
 
     public void pause() {
-        synchronized (lock) {
+        lock.writeLock().lock();
+        try {
             isPaused = true;
             itemInfo.setStatus(Status.PAUSED);
             log.info("set item {} to paused status, isPaused: {}", itemInfo.getName(), isPaused);
+        } finally {
+            lock.writeLock().unlock();
         }
     }
 
     public void resume() {
-        isPaused = false;
-        itemInfo.setStatus(Status.IN_PROGRESS);
-        log.info("set item {} to in progress status, isPaused: {}", itemInfo.getName(), isPaused);
+        lock.writeLock().lock();
+        try {
+            isPaused = false;
+            itemInfo.setStatus(Status.IN_PROGRESS);
+            log.info("set item {} to in progress status, isPaused: {}", itemInfo.getName(), isPaused);
+        } finally {
+            lock.writeLock().unlock();
+        }
     }
 
     public boolean isPaused() {
