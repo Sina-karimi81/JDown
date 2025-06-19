@@ -1,5 +1,3 @@
-package download;
-
 import com.github.sinakarimi81.jdown.configuration.ConfigurationUtils;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

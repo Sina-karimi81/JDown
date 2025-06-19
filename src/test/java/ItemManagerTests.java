@@ -1,5 +1,3 @@
-package download;
-
 import com.github.sinakarimi81.jdown.common.HttpConstants;
 import com.github.sinakarimi81.jdown.dataObjects.Item;
 import com.github.sinakarimi81.jdown.dataObjects.ItemInfo;
@@ -25,7 +23,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
-public class ItemMangerTests {
+public class ItemManagerTests {
 
     private final ItemManager manager = new ItemManager();
     private MockedStatic<HttpClient> mockedHttpClient;

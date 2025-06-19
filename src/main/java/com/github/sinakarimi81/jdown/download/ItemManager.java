@@ -3,6 +3,7 @@ package com.github.sinakarimi81.jdown.download;
 import com.github.sinakarimi81.jdown.dataObjects.ItemInfo;
 import com.github.sinakarimi81.jdown.dataObjects.Item;
 import com.github.sinakarimi81.jdown.dataObjects.Status;
+import com.github.sinakarimi81.jdown.database.DatabaseManager;
 import com.github.sinakarimi81.jdown.exception.FileDataRequestFailedException;
 
 import java.net.URI;
@@ -18,7 +19,6 @@ import static com.github.sinakarimi81.jdown.common.HttpConstants.*;
 public class ItemManager {
 
     public Item createItem(String url, String savedAddress) throws FileDataRequestFailedException {
-        Item downloadItem = new Item();
         ItemInfo itemInfo = new ItemInfo();
         itemInfo.setDownloadUrl(url);
         Optional<HttpResponse<Void>> itemData = getItemData(url);
@@ -52,7 +52,9 @@ public class ItemManager {
             itemInfo.setStatus(Status.PAUSED);
             itemInfo.setSavePath(savedAddress);
         }
-        downloadItem.setItemInfo(itemInfo);
+
+        DownloadTask downloadTask = new DownloadTask(itemInfo);
+        Item downloadItem = new Item(itemInfo, downloadTask);
 
         return downloadItem;
     }

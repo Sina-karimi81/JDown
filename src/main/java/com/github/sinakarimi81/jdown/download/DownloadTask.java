@@ -7,6 +7,7 @@ import com.github.sinakarimi81.jdown.dataObjects.Range;
 import com.github.sinakarimi81.jdown.dataObjects.Status;
 import com.github.sinakarimi81.jdown.exception.CancelationFailedException;
 import com.github.sinakarimi81.jdown.exception.DownloadFailedException;
+import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
 import java.io.BufferedOutputStream;
@@ -31,6 +32,7 @@ public class DownloadTask {
 
     private CompletableFuture<Void> downloadTask;
     private final ItemInfo itemInfo;
+    @Getter
     private final byte[] data;
     private final ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
     private volatile boolean isPaused = false;
@@ -38,6 +40,11 @@ public class DownloadTask {
     public DownloadTask(ItemInfo itemInfo) {
         this.itemInfo = itemInfo;
         data = new byte[itemInfo.getSize().intValue()];
+    }
+
+    public DownloadTask(ItemInfo itemInfo, byte[] data) {
+        this.itemInfo = itemInfo;
+        this.data = data;
     }
 
     public void cancel() {
