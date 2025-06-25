@@ -1,7 +1,7 @@
 package com.github.sinakarimi81.jdown.download;
 
-import com.github.sinakarimi81.jdown.dataObjects.ItemInfo;
 import com.github.sinakarimi81.jdown.dataObjects.Item;
+import com.github.sinakarimi81.jdown.dataObjects.ItemInfo;
 import com.github.sinakarimi81.jdown.dataObjects.Status;
 import com.github.sinakarimi81.jdown.database.DatabaseManager;
 import com.github.sinakarimi81.jdown.exception.FileDataRequestFailedException;
@@ -17,6 +17,12 @@ import java.util.Optional;
 import static com.github.sinakarimi81.jdown.common.HttpConstants.*;
 
 public class ItemManager {
+
+    private final DatabaseManager dbManger;
+
+    public ItemManager(DatabaseManager dbManger) {
+        this.dbManger = dbManger;
+    }
 
     public Item createItem(String url, String savedAddress) throws FileDataRequestFailedException {
         ItemInfo itemInfo = new ItemInfo();
@@ -56,6 +62,8 @@ public class ItemManager {
         DownloadTask downloadTask = new DownloadTask(itemInfo);
         Item downloadItem = new Item(itemInfo, downloadTask);
 
+        dbManger.insert(downloadItem);
+
         return downloadItem;
     }
 
@@ -86,6 +94,10 @@ public class ItemManager {
         }
 
         return Optional.ofNullable(response);
+    }
+
+    public List<Item> listAllItems() {
+        return dbManger.getAllItems();
     }
 
 }

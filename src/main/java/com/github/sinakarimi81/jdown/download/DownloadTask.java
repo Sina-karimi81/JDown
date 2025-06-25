@@ -2,6 +2,7 @@ package com.github.sinakarimi81.jdown.download;
 
 import com.github.sinakarimi81.jdown.common.HttpUtils;
 import com.github.sinakarimi81.jdown.configuration.ConfigurationUtils;
+import com.github.sinakarimi81.jdown.dataObjects.DataSegment;
 import com.github.sinakarimi81.jdown.dataObjects.ItemInfo;
 import com.github.sinakarimi81.jdown.dataObjects.Range;
 import com.github.sinakarimi81.jdown.dataObjects.Status;
@@ -16,12 +17,12 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
+import java.util.Map;
+import java.util.concurrent.*;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 import static com.github.sinakarimi81.jdown.common.HttpConstants.GET_METHOD;
@@ -30,21 +31,27 @@ import static com.github.sinakarimi81.jdown.common.HttpConstants.RANGE;
 @Slf4j
 public class DownloadTask {
 
+    @Getter
+    private final ConcurrentMap<Range, DataSegment> segments;
     private CompletableFuture<Void> downloadTask;
     private final ItemInfo itemInfo;
-    @Getter
-    private final byte[] data;
     private final ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
-    private volatile boolean isPaused = false;
+    private volatile boolean isPaused = true;
+
 
     public DownloadTask(ItemInfo itemInfo) {
         this.itemInfo = itemInfo;
-        data = new byte[itemInfo.getSize().intValue()];
+        this.segments = new ConcurrentHashMap<>();
     }
 
-    public DownloadTask(ItemInfo itemInfo, byte[] data) {
+    public DownloadTask(ItemInfo itemInfo, boolean isPaused) {
+        this(itemInfo);
+        this.isPaused = isPaused;
+    }
+
+    public DownloadTask(ItemInfo itemInfo, ConcurrentMap<Range, DataSegment> segments) {
         this.itemInfo = itemInfo;
-        this.data = data;
+        this.segments = segments;
     }
 
     public void cancel() {
@@ -96,7 +103,7 @@ public class DownloadTask {
         List<Range> ranges = createRanges(itemInfo.getSize());
 
         for (Range range: ranges) {
-            CompletableFuture<Void> downloadPartition = createPartitionedDownloadTasks(range);
+            CompletableFuture<Void> downloadPartition = createDataSegments(range);
             requests.add(downloadPartition);
         }
 
@@ -115,7 +122,7 @@ public class DownloadTask {
         log.info("Finished creating request for {}", itemInfo.getName());
     }
 
-    private CompletableFuture<Void> createPartitionedDownloadTasks(Range range) {
+    private CompletableFuture<Void> createDataSegments(Range range) {
         return CompletableFuture.runAsync(() -> {
             try {
 
@@ -125,6 +132,9 @@ public class DownloadTask {
                 } else {
                     rangeValues = String.format("bytes=%d-%d", range.getFrom(), range.getTo());
                 }
+
+                int size = range.getTo() - range.getFrom() + 1;
+                segments.put(range, new DataSegment(size));
 
                 while (isPaused) {
                     log.info("inside the pause loop for item {}, isPaused: {} Thread: {}", itemInfo.getName(), isPaused, Thread.currentThread().getName());
@@ -167,23 +177,28 @@ public class DownloadTask {
     }
 
     private void saveToArray(Range range, HttpResponse<byte[]> response) {
-        log.info("saving request range {} with status {} to byte array", range.toString(), response.statusCode());
+        log.info("saving request range {} with status {} to byte array", range.rangeString(), response.statusCode());
         if (!HttpUtils.isStatusCode2xx(response)) {
-            String message = String.format("Failed to fetch data for range %d to %d with status code %d", range.getFrom(), range.getTo(), response.statusCode());
+            String message = String.format("Failed to fetch data for range %s with status code %d", range.rangeString(), response.statusCode());
             throw new DownloadFailedException(message);
         }
 
         byte[] body = response.body();
-        System.arraycopy(body, 0, data, range.getFrom(), (range.getTo()-range.getFrom()+1));
-        log.info("finished saving request range {} ", range);
+        DataSegment dataSegment = segments.get(range);
+        dataSegment.setSegment(body);
+        dataSegment.setComplete(true);
+        segments.put(range, dataSegment);
+        log.info("finished saving request range {} ", range.rangeString());
     }
 
     private void saveToFile() throws DownloadFailedException {
         log.info("saving download result for item {} into a file in path {}", itemInfo.getName(), itemInfo.getSavePath());
+
+        byte[] bytes = combineDataSegments();
         try (FileOutputStream outputStream = new FileOutputStream(itemInfo.getSavePath() + "/" + itemInfo.getName());
              BufferedOutputStream writer = new BufferedOutputStream(outputStream)) {
 
-            writer.write(data);
+            writer.write(bytes);
             itemInfo.setStatus(Status.COMPLETED);
         } catch (Exception e) {
             log.error("failed to save byte array to file!!!", e);
@@ -191,6 +206,28 @@ public class DownloadTask {
             throw new DownloadFailedException("Failed to write the data into file: " + itemInfo.getName(), e);
         }
         log.info("finished saving download result for item {} into a file in path {}", itemInfo.getName(), itemInfo.getSavePath());
+    }
+
+    private byte[] combineDataSegments() {
+        int totalLength = 0;
+        List<byte[]> byteArrays = segments.entrySet()
+                .stream()
+                .sorted(Map.Entry.comparingByKey())
+                .map(Map.Entry::getValue)
+                .map(DataSegment::getSegment)
+                .toList();
+
+        for (byte[] byteArray : byteArrays) {
+            totalLength += byteArray.length;
+        }
+
+        ByteBuffer buffer = ByteBuffer.allocate(totalLength);
+
+        for (byte[] byteArray : byteArrays) {
+            buffer.put(byteArray);
+        }
+
+        return buffer.array();
     }
 
     public void waitForDuration(int duration) throws ExecutionException, InterruptedException, TimeoutException {

@@ -40,11 +40,6 @@ public class DatabaseManagerTests {
     }
 
     @Test
-    void createDatabaseTable() {
-        assertDoesNotThrow(manager::createTable);
-    }
-
-    @Test
     void fetchAllData() {
         List<Item> allItems = manager.getAllItems();
         assertThat(allItems).extracting(Item::getItemInfo).extracting(ItemInfo::getName).containsExactly("ITEM1", "ITEM2", "ITEM3");

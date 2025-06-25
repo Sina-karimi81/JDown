@@ -1,8 +1,6 @@
 import com.github.sinakarimi81.jdown.common.HttpConstants;
-import com.github.sinakarimi81.jdown.dataObjects.Item;
-import com.github.sinakarimi81.jdown.dataObjects.ItemInfo;
-import com.github.sinakarimi81.jdown.dataObjects.Range;
-import com.github.sinakarimi81.jdown.dataObjects.Status;
+import com.github.sinakarimi81.jdown.dataObjects.*;
+import com.github.sinakarimi81.jdown.database.DatabaseManager;
 import com.github.sinakarimi81.jdown.download.DownloadTask;
 import com.github.tomakehurst.wiremock.WireMockServer;
 import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
@@ -17,10 +15,8 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeoutException;
 import java.util.stream.Stream;
@@ -31,6 +27,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 @ExtendWith(MockitoExtension.class)
 public class DownloadTaskTests {
+    private final DatabaseManager dbManager = DatabaseManager.getInstance("testDb");
     private WireMockServer wireMockServer;
 
     @BeforeEach
@@ -45,6 +42,7 @@ public class DownloadTaskTests {
         if (wireMockServer != null) {
             wireMockServer.stop();
         }
+        dbManager.deleteAll();
     }
 
     @TempDir
@@ -75,7 +73,7 @@ public class DownloadTaskTests {
         Item item = new Item();
         ItemInfo info = new ItemInfo("downloadedTestFile.txt", "application/octet-stream", Status.PAUSED, 72L, tempDir.toString(), "http://localhost:9090/testFile.txt", true);
         item.setItemInfo(info);
-        DownloadTask downloadTask = new DownloadTask(item.getItemInfo());
+        DownloadTask downloadTask = new DownloadTask(item.getItemInfo(), false);
 
         List<Range> ranges = createRanges(info.getSize(), downloadTask);
         Map<String, byte[]> data = getStringMap(output, ranges, 72);
@@ -109,6 +107,88 @@ public class DownloadTaskTests {
         } catch (Exception e) {
             fail("test failed because an exception occurred", e);
         }
+    }
+
+    @Test
+    public void Given_DownloadTask_Expect_TobeInsertedInDB() throws IOException, InterruptedException, ExecutionException {
+        Path path = Path.of("src/test/resources/testFile.txt");
+        byte[] output = Files.readAllBytes(path);
+
+        Item item = new Item();
+        ItemInfo info = new ItemInfo("downloadedTestFile.txt", "application/octet-stream", Status.PAUSED, 72L, tempDir.toString(), "http://localhost:9090/testFile.txt", true);
+        item.setItemInfo(info);
+        DownloadTask downloadTask = new DownloadTask(item.getItemInfo());
+
+        List<Range> ranges = createRanges(info.getSize(), downloadTask);
+        Map<String, byte[]> data = getStringMap(output, ranges, 72);
+
+        int index = 1;
+        for (Range range : ranges) {
+            String rangeValues;
+            if (range.getTo() >= info.getSize()) {
+                rangeValues = String.format("bytes=%d-", range.getFrom());
+            } else {
+                rangeValues = String.format("bytes=%d-%d", range.getFrom(), range.getTo());
+            }
+
+            stubFor(get(urlEqualTo("/testFile.txt"))
+                    .withHeader(HttpConstants.RANGE.getValue(), equalTo(rangeValues))
+                    .willReturn(aResponse().withBody(data.get("bytes" + index)).withStatus(206))
+            );
+            index++;
+        }
+
+        downloadTask.start();
+
+        item.setDownloadTask(downloadTask);
+
+        assertDoesNotThrow(() -> dbManager.insert(item));
+    }
+
+    @Test
+    public void Given_DownloadTask_Expect_TobeInValidState_When_FetchedFromDB() throws IOException, InterruptedException, ExecutionException {
+        Path path = Path.of("src/test/resources/testFile.txt");
+        byte[] output = Files.readAllBytes(path);
+
+        Item item = new Item();
+        ItemInfo info = new ItemInfo("downloadedTestFile.txt", "application/octet-stream", Status.PAUSED, 72L, tempDir.toString(), "http://localhost:9090/testFile.txt", true);
+        item.setItemInfo(info);
+        DownloadTask downloadTask = new DownloadTask(item.getItemInfo());
+
+        List<Range> ranges = createRanges(info.getSize(), downloadTask);
+        Map<String, byte[]> data = getStringMap(output, ranges, 72);
+
+        int index = 1;
+        for (Range range : ranges) {
+            String rangeValues;
+            if (range.getTo() >= info.getSize()) {
+                rangeValues = String.format("bytes=%d-", range.getFrom());
+            } else {
+                rangeValues = String.format("bytes=%d-%d", range.getFrom(), range.getTo());
+            }
+
+            stubFor(get(urlEqualTo("/testFile.txt"))
+                    .withHeader(HttpConstants.RANGE.getValue(), equalTo(rangeValues))
+                    .willReturn(aResponse().withBody(data.get("bytes" + index)).withStatus(206))
+            );
+            index++;
+        }
+
+        downloadTask.start();
+        downloadTask.pause();
+
+        item.setDownloadTask(downloadTask);
+
+        assertDoesNotThrow(() -> dbManager.insert(item));
+        assertEquals(Status.PAUSED, item.getItemInfo().getStatus());
+        Optional<Item> itemByKey = dbManager.getItemByKey(item.getItemInfo().getName());
+        assertTrue(itemByKey.isPresent());
+        Item fetchedItem = itemByKey.get();
+        ConcurrentMap<Range, DataSegment> segments = fetchedItem.getDownloadTask().getSegments();
+        Collection<DataSegment> values = segments.values();
+        assertThat(segments).containsAllEntriesOf(downloadTask.getSegments());
+        assertThat(values).extracting(DataSegment::isComplete).allMatch(ic -> ic.equals(Boolean.FALSE));
+        assertThat(values).extracting(DataSegment::getSegment).allMatch(s -> s.length != 0);
     }
 
     @Test
