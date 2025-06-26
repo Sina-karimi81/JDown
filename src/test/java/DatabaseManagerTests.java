@@ -1,5 +1,3 @@
-import com.github.sinakarimi81.jdown.dataObjects.Item;
-import com.github.sinakarimi81.jdown.dataObjects.ItemInfo;
 import com.github.sinakarimi81.jdown.dataObjects.Status;
 import com.github.sinakarimi81.jdown.database.DatabaseManager;
 import com.github.sinakarimi81.jdown.download.DownloadTask;
@@ -21,17 +19,38 @@ public class DatabaseManagerTests {
 
     @BeforeEach()
     public void setup() {
-        ItemInfo itemInfo1 = new ItemInfo("ITEM1" , "BINARY" , Status.PAUSED , 80L , "opt/test/test" , "localhost:9090" , true);
-        DownloadTask downloadTask1 = new DownloadTask(itemInfo1);
+        DownloadTask downloadTask1 = DownloadTask.builder()
+                .name("ITEM1")
+                .type("BINARY")
+                .status(Status.PAUSED)
+                .size(80L)
+                .savePath("opt/test/test")
+                .downloadUrl("localhost:9090")
+                .resumable(true)
+                .build();
 
-        ItemInfo itemInfo2 = new ItemInfo("ITEM2" , "TEXT" , Status.ERROR , 80L , "opt/test/test" , "localhost:9090" , true);
-        DownloadTask downloadTask2 = new DownloadTask(itemInfo2);
+        DownloadTask downloadTask2 = DownloadTask.builder()
+                .name("ITEM2")
+                .type("TEXT")
+                .status(Status.ERROR)
+                .size(80L)
+                .savePath("opt/test/test")
+                .downloadUrl("localhost:9090")
+                .resumable(true)
+                .build();
 
-        ItemInfo itemInfo3 = new ItemInfo("ITEM3" , "IMAGE" , Status.CANCELED , 80L , "opt/test/test" , "localhost:9090" , true);
-        DownloadTask downloadTask3 = new DownloadTask(itemInfo3);
+        DownloadTask downloadTask3 = DownloadTask.builder()
+                .name("ITEM3")
+                .type("IMAGE")
+                .status(Status.CANCELED)
+                .size(80L)
+                .savePath("opt/test/test")
+                .downloadUrl("localhost:9090")
+                .resumable(true)
+                .build();
 
-        List<Item> items = List.of(new Item(itemInfo1, downloadTask1), new Item(itemInfo2, downloadTask2), new Item(itemInfo3, downloadTask3));
-        manager.insertAll(items);
+        List<DownloadTask> downloadTasks = List.of(downloadTask1, downloadTask2, downloadTask3);
+        manager.insertAll(downloadTasks);
     }
     
     @AfterEach
@@ -41,49 +60,55 @@ public class DatabaseManagerTests {
 
     @Test
     void fetchAllData() {
-        List<Item> allItems = manager.getAllItems();
-        assertThat(allItems).extracting(Item::getItemInfo).extracting(ItemInfo::getName).containsExactly("ITEM1", "ITEM2", "ITEM3");
-        assertThat(allItems).extracting(Item::getItemInfo).extracting(ItemInfo::getStatus).containsExactly(Status.PAUSED, Status.ERROR, Status.CANCELED);
+        List<DownloadTask> allItems = manager.getAllItems();
+        assertThat(allItems).extracting(DownloadTask::getName).containsExactly("ITEM1", "ITEM2", "ITEM3");
+        assertThat(allItems).extracting(DownloadTask::getStatus).containsExactly(Status.PAUSED, Status.ERROR, Status.CANCELED);
         System.out.println(allItems);
     }
 
     @Test
     void insertNewItem() {
-        ItemInfo itemInfo = new ItemInfo("item4", "video", Status.COMPLETED, 72L, "opt/test/test", "localhost:9090", false);
-        DownloadTask downloadTask = new DownloadTask(itemInfo);
-        Item item = new Item(itemInfo, downloadTask);
+        DownloadTask downloadTask = DownloadTask.builder()
+                .name("item4")
+                .type("video")
+                .status(Status.COMPLETED)
+                .size(72L)
+                .savePath("opt/test/test")
+                .downloadUrl("localhost:9090")
+                .resumable(false)
+                .build();
 
-        assertDoesNotThrow(() -> manager.insert(item));
-        List<Item> allItems = manager.getAllItems();
+        assertDoesNotThrow(() -> manager.insert(downloadTask));
+        List<DownloadTask> allItems = manager.getAllItems();
         assertEquals(4, allItems.size());
     }
 
     @Test
     void deleteFromDatabase() {
-        List<Item> allItems = manager.getAllItems();
+        List<DownloadTask> allItems = manager.getAllItems();
 
-        String key = allItems.get(0).getItemInfo().getName();
+        String key = allItems.get(0).getName();
         assertDoesNotThrow(() -> manager.delete(key));
 
-        List<Item> allItemsAfterDelete = manager.getAllItems();
+        List<DownloadTask> allItemsAfterDelete = manager.getAllItems();
         assertEquals(2, allItemsAfterDelete.size());
-        assertThat(allItemsAfterDelete).extracting(Item::getItemInfo).extracting(ItemInfo::getName).doesNotContain(key);
+        assertThat(allItemsAfterDelete).extracting(DownloadTask::getName).doesNotContain(key);
     }
 
     @Test
     void updateAnItem() {
-        List<Item> allItems = manager.getAllItems();
-        Item item = allItems.get(0);
+        List<DownloadTask> allItems = manager.getAllItems();
+        DownloadTask downloadTask = allItems.get(0);
 
-        String oldValue = item.getItemInfo().getSavePath();
+        String oldValue = downloadTask.getSavePath();
         String newValue = "opt/sina/test/";
-        item.getItemInfo().setSavePath(newValue);
+        downloadTask.setSavePath(newValue);
 
-        assertDoesNotThrow(() -> manager.update(item));
-        List<Item> allItemsAfterUpdate = manager.getAllItems();
-        Item newItem = allItemsAfterUpdate.get(0);
-        assertNotEquals(oldValue, newItem.getItemInfo().getSavePath());
-        assertEquals(newValue, newItem.getItemInfo().getSavePath());
-        assertEquals(item.getItemInfo().getName(), newItem.getItemInfo().getName());
+        assertDoesNotThrow(() -> manager.update(downloadTask));
+        List<DownloadTask> allItemsAfterUpdate = manager.getAllItems();
+        DownloadTask newDownloadTask = allItemsAfterUpdate.get(0);
+        assertNotEquals(oldValue, newDownloadTask.getSavePath());
+        assertEquals(newValue, newDownloadTask.getSavePath());
+        assertEquals(downloadTask.getName(), newDownloadTask.getName());
     }
 }

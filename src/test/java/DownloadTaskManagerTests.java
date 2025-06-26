@@ -1,12 +1,10 @@
 import com.github.sinakarimi81.jdown.common.HttpConstants;
-import com.github.sinakarimi81.jdown.dataObjects.Item;
-import com.github.sinakarimi81.jdown.dataObjects.ItemInfo;
 import com.github.sinakarimi81.jdown.dataObjects.Status;
 import com.github.sinakarimi81.jdown.database.DatabaseManager;
-import com.github.sinakarimi81.jdown.download.ItemManager;
+import com.github.sinakarimi81.jdown.download.DownloadTask;
+import com.github.sinakarimi81.jdown.download.DownloadTaskManager;
 import com.github.sinakarimi81.jdown.exception.FileDataRequestFailedException;
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -26,10 +24,10 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
-public class ItemManagerTests {
+public class DownloadTaskManagerTests {
 
     private static final DatabaseManager dbManager = DatabaseManager.getInstance("testDb");
-    private final ItemManager manager = new ItemManager(dbManager);
+    private final DownloadTaskManager manager = new DownloadTaskManager(dbManager);
     private MockedStatic<HttpClient> mockedHttpClient;
 
     @BeforeEach
@@ -53,16 +51,15 @@ public class ItemManagerTests {
 
         String fileUrl = "https://example.com/someMovie.mkv";
         String savedAddress = "/apt/movies";
-        Item item = manager.createItem(fileUrl, savedAddress);
-        ItemInfo info = item.getItemInfo();
+        DownloadTask downloadTask = manager.createTask(fileUrl, savedAddress);
 
-        assertEquals("someMovie.mkv", info.getName());
-        assertEquals("application/octet-stream", info.getType());
-        assertEquals(savedAddress, info.getSavePath());
-        assertEquals(fileUrl, info.getDownloadUrl());
-        assertTrue(info.getResumable());
-        assertEquals(71841045L, info.getSize());
-        assertEquals(Status.PAUSED, info.getStatus());
+        assertEquals("someMovie.mkv", downloadTask.getName());
+        assertEquals("application/octet-stream", downloadTask.getType());
+        assertEquals(savedAddress, downloadTask.getSavePath());
+        assertEquals(fileUrl, downloadTask.getDownloadUrl());
+        assertTrue(downloadTask.getResumable());
+        assertEquals(71841045L, downloadTask.getSize());
+        assertEquals(Status.PAUSED, downloadTask.getStatus());
     }
 
     @Test
@@ -75,20 +72,19 @@ public class ItemManagerTests {
 
         String fileUrl = "https://example.com/someMovie.mkv";
         String savedAddress = "/apt/movies";
-        Item item = manager.createItem(fileUrl, savedAddress);
-        ItemInfo info = item.getItemInfo();
+        DownloadTask downloadTask = manager.createTask(fileUrl, savedAddress);
 
-        Optional<Item> itemByKey = dbManager.getItemByKey(info.getName());
+        Optional<DownloadTask> itemByKey = dbManager.getItemByKey(downloadTask.getName());
 
         assertTrue(itemByKey.isPresent());
-        ItemInfo persistedIteminfo = itemByKey.get().getItemInfo();
-        assertEquals("someMovie.mkv", persistedIteminfo.getName());
-        assertEquals("application/octet-stream", persistedIteminfo.getType());
-        assertEquals(savedAddress, persistedIteminfo.getSavePath());
-        assertEquals(fileUrl, persistedIteminfo.getDownloadUrl());
-        assertTrue(persistedIteminfo.getResumable());
-        assertEquals(71841045L, persistedIteminfo.getSize());
-        assertEquals(Status.PAUSED, persistedIteminfo.getStatus());
+        DownloadTask persistedDownloadTask = itemByKey.get();
+        assertEquals("someMovie.mkv", persistedDownloadTask.getName());
+        assertEquals("application/octet-stream", persistedDownloadTask.getType());
+        assertEquals(savedAddress, persistedDownloadTask.getSavePath());
+        assertEquals(fileUrl, persistedDownloadTask.getDownloadUrl());
+        assertTrue(persistedDownloadTask.getResumable());
+        assertEquals(71841045L, persistedDownloadTask.getSize());
+        assertEquals(Status.PAUSED, persistedDownloadTask.getStatus());
     }
 
     @Test
@@ -101,16 +97,15 @@ public class ItemManagerTests {
 
         String fileUrl = "https://example.com/someMovie.mkv";
         String savedAddress = "/apt/movies";
-        Item item = manager.createItem(fileUrl, savedAddress);
-        ItemInfo info = item.getItemInfo();
+        DownloadTask downloadTask = manager.createTask(fileUrl, savedAddress);
 
-        assertEquals("bigMovie.mkv", info.getName());
-        assertEquals("application/octet-stream", info.getType());
-        assertEquals(savedAddress, info.getSavePath());
-        assertEquals(fileUrl, info.getDownloadUrl());
-        assertTrue(info.getResumable());
-        assertEquals(71841045L, info.getSize());
-        assertEquals(Status.PAUSED, info.getStatus());
+        assertEquals("bigMovie.mkv", downloadTask.getName());
+        assertEquals("application/octet-stream", downloadTask.getType());
+        assertEquals(savedAddress, downloadTask.getSavePath());
+        assertEquals(fileUrl, downloadTask.getDownloadUrl());
+        assertTrue(downloadTask.getResumable());
+        assertEquals(71841045L, downloadTask.getSize());
+        assertEquals(Status.PAUSED, downloadTask.getStatus());
     }
 
     @Test
@@ -122,7 +117,7 @@ public class ItemManagerTests {
 
         String fileUrl = "https://example.com/someMovie.mkv";
         String savedAddress = "/apt/movies";
-        assertThrows(FileDataRequestFailedException.class, () -> manager.createItem(fileUrl, savedAddress));
+        assertThrows(FileDataRequestFailedException.class, () -> manager.createTask(fileUrl, savedAddress));
     }
 
     @Test
@@ -134,7 +129,7 @@ public class ItemManagerTests {
 
         String fileUrl = "https://example.com/someMovie.mkv";
         String savedAddress = "/apt/movies";
-        assertThrows(FileDataRequestFailedException.class, () -> manager.createItem(fileUrl, savedAddress));
+        assertThrows(FileDataRequestFailedException.class, () -> manager.createTask(fileUrl, savedAddress));
     }
 
     private Map<String, List<String>> getMockHeaders(List<String> ranges, List<String> length, List<String> type, List<String> disposition) {

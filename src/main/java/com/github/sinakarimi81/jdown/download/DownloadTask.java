@@ -3,12 +3,15 @@ package com.github.sinakarimi81.jdown.download;
 import com.github.sinakarimi81.jdown.common.HttpUtils;
 import com.github.sinakarimi81.jdown.configuration.ConfigurationUtils;
 import com.github.sinakarimi81.jdown.dataObjects.DataSegment;
-import com.github.sinakarimi81.jdown.dataObjects.ItemInfo;
 import com.github.sinakarimi81.jdown.dataObjects.Range;
 import com.github.sinakarimi81.jdown.dataObjects.Status;
 import com.github.sinakarimi81.jdown.exception.CancelationFailedException;
 import com.github.sinakarimi81.jdown.exception.DownloadFailedException;
+import com.github.sinakarimi81.jdown.exception.DownloadNotResumableException;
+import lombok.Builder;
 import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 
 import java.io.BufferedOutputStream;
@@ -19,7 +22,6 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.*;
@@ -33,35 +35,70 @@ public class DownloadTask {
 
     @Getter
     private final ConcurrentMap<Range, DataSegment> segments;
+    @Getter
+    @Setter
+    private String name;
+    @Getter
+    @Setter
+    private String type;
+    @Getter
+    @Setter
+    private Status status;
+    @Getter
+    @Setter
+    private Long size;
+    @Getter
+    @Setter
+    private String savePath;
+    @Getter
+    @Setter
+    private String downloadUrl;
+    @Getter
+    @Setter
+    private Boolean resumable;
+
     private CompletableFuture<Void> downloadTask;
-    private final ItemInfo itemInfo;
     private final ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
-    private volatile boolean isPaused = true;
+    private volatile boolean isPaused = false;
 
+    public DownloadTask() {
+        segments = new ConcurrentHashMap<>();
+    }
 
-    public DownloadTask(ItemInfo itemInfo) {
-        this.itemInfo = itemInfo;
+    @Builder
+    public DownloadTask(String name, String type, Status status, Long size, String savePath, String downloadUrl, Boolean resumable, Boolean isPaused) {
+        this.name = name;
+        this.type = type;
+        this.status = status;
+        this.size = size;
+        this.savePath = savePath;
+        this.downloadUrl = downloadUrl;
+        this.resumable = resumable;
+        this.isPaused = isPaused;
         this.segments = new ConcurrentHashMap<>();
     }
 
-    public DownloadTask(ItemInfo itemInfo, boolean isPaused) {
-        this(itemInfo);
+    @Builder(builderMethodName = "builderWithSegment", buildMethodName = "buildWithSegments")
+    public DownloadTask(String name, String type, Status status, Long size, String savePath, String downloadUrl, Boolean resumable, Boolean isPaused, ConcurrentMap<Range, DataSegment> segments) {
+        this.name = name;
+        this.type = type;
+        this.status = status;
+        this.size = size;
+        this.savePath = savePath;
+        this.downloadUrl = downloadUrl;
+        this.resumable = resumable;
         this.isPaused = isPaused;
-    }
-
-    public DownloadTask(ItemInfo itemInfo, ConcurrentMap<Range, DataSegment> segments) {
-        this.itemInfo = itemInfo;
         this.segments = segments;
     }
 
     public void cancel() {
-        log.info("cancelling the download of file {}", itemInfo.getName());
+        log.info("cancelling the download of file {}", name);
         boolean cancel = downloadTask.cancel(true);
         if (cancel) {
-            itemInfo.setStatus(Status.CANCELED);
-            log.info("cancelled the download of file {} successfully", itemInfo.getName());
+            status = Status.CANCELED;
+            log.info("cancelled the download of file {} successfully", name);
         } else {
-            log.error("failed to cancel the download of file {} successfully", itemInfo.getName());
+            log.error("failed to cancel the download of file {} successfully", name);
             throw new CancelationFailedException("Failed to cancel the download!");
         }
     }
@@ -69,9 +106,14 @@ public class DownloadTask {
     public void pause() {
         lock.writeLock().lock();
         try {
+            if (!resumable) {
+                String message = String.format("download of file %s cannot be paused!", name);
+                throw new DownloadNotResumableException(message);
+            }
+
             isPaused = true;
-            itemInfo.setStatus(Status.PAUSED);
-            log.info("set item {} to paused status, isPaused: {}", itemInfo.getName(), isPaused);
+            status = Status.PAUSED;
+            log.info("set item {} to paused status, isPaused: {}", name, isPaused);
         } finally {
             lock.writeLock().unlock();
         }
@@ -81,8 +123,8 @@ public class DownloadTask {
         lock.writeLock().lock();
         try {
             isPaused = false;
-            itemInfo.setStatus(Status.IN_PROGRESS);
-            log.info("set item {} to in progress status, isPaused: {}", itemInfo.getName(), isPaused);
+            status = Status.IN_PROGRESS;
+            log.info("set item {} to in progress status, isPaused: {}", name, isPaused);
         } finally {
             lock.writeLock().unlock();
         }
@@ -99,8 +141,8 @@ public class DownloadTask {
     public void start() throws DownloadFailedException {
         List<CompletableFuture<Void>> requests= new ArrayList<>();
 
-        log.info("started to create a request for the {}", itemInfo.getName());
-        List<Range> ranges = createRanges(itemInfo.getSize());
+        log.info("started to create a request for the {}", name);
+        List<Range> ranges = createRanges(size);
 
         for (Range range: ranges) {
             CompletableFuture<Void> downloadPartition = createDataSegments(range);
@@ -118,8 +160,8 @@ public class DownloadTask {
                     return null;
                 });
 
-        itemInfo.setStatus(Status.IN_PROGRESS);
-        log.info("Finished creating request for {}", itemInfo.getName());
+        status = Status.IN_PROGRESS;
+        log.info("Finished creating request for {}", name);
     }
 
     private CompletableFuture<Void> createDataSegments(Range range) {
@@ -127,7 +169,7 @@ public class DownloadTask {
             try {
 
                 String rangeValues;
-                if (range.getTo() >= itemInfo.getSize()) {
+                if (range.getTo() >= size) {
                     rangeValues = String.format("bytes=%d-", range.getFrom());
                 } else {
                     rangeValues = String.format("bytes=%d-%d", range.getFrom(), range.getTo());
@@ -137,13 +179,13 @@ public class DownloadTask {
                 segments.put(range, new DataSegment(size));
 
                 while (isPaused) {
-                    log.info("inside the pause loop for item {}, isPaused: {} Thread: {}", itemInfo.getName(), isPaused, Thread.currentThread().getName());
+                    log.info("inside the pause loop for item {}, isPaused: {} Thread: {}", name, isPaused, Thread.currentThread().getName());
                     Thread.onSpinWait(); // just used for performance by the JVM, no additional functionality
                 }
 
                 HttpClient client = HttpClient.newHttpClient();
                 HttpRequest request = HttpRequest
-                        .newBuilder(new URI(itemInfo.getDownloadUrl()))
+                        .newBuilder(new URI(downloadUrl))
                         .method(GET_METHOD.getValue(), HttpRequest.BodyPublishers.noBody())
                         .header(RANGE.getValue(), rangeValues)
                         .build();
@@ -151,9 +193,9 @@ public class DownloadTask {
                 HttpResponse<byte[]> send = client.send(request, HttpResponse.BodyHandlers.ofByteArray());
                 saveToArray(range, send);
             } catch (Exception e) {
-                log.error("failed create a request for the given item with name {}!!!", itemInfo.getName(), e);
-                itemInfo.setStatus(Status.ERROR);
-                throw new DownloadFailedException("Failed to download the requested file: " + itemInfo.getName(), e);
+                log.error("failed create a request for the given item with name {}!!!", name, e);
+                status = Status.ERROR;
+                throw new DownloadFailedException("Failed to download the requested file: " + name, e);
             }
         });
     }
@@ -192,20 +234,20 @@ public class DownloadTask {
     }
 
     private void saveToFile() throws DownloadFailedException {
-        log.info("saving download result for item {} into a file in path {}", itemInfo.getName(), itemInfo.getSavePath());
+        log.info("saving download result for item {} into a file in path {}", name, savePath);
 
         byte[] bytes = combineDataSegments();
-        try (FileOutputStream outputStream = new FileOutputStream(itemInfo.getSavePath() + "/" + itemInfo.getName());
+        try (FileOutputStream outputStream = new FileOutputStream(savePath + "/" + name);
              BufferedOutputStream writer = new BufferedOutputStream(outputStream)) {
 
             writer.write(bytes);
-            itemInfo.setStatus(Status.COMPLETED);
+            status = Status.COMPLETED;
         } catch (Exception e) {
             log.error("failed to save byte array to file!!!", e);
-            itemInfo.setStatus(Status.ERROR);
-            throw new DownloadFailedException("Failed to write the data into file: " + itemInfo.getName(), e);
+            status = Status.ERROR;
+            throw new DownloadFailedException("Failed to write the data into file: " + name, e);
         }
-        log.info("finished saving download result for item {} into a file in path {}", itemInfo.getName(), itemInfo.getSavePath());
+        log.info("finished saving download result for item {} into a file in path {}", name, savePath);
     }
 
     private byte[] combineDataSegments() {

@@ -1,7 +1,5 @@
 package com.github.sinakarimi81.jdown.download;
 
-import com.github.sinakarimi81.jdown.dataObjects.Item;
-import com.github.sinakarimi81.jdown.dataObjects.ItemInfo;
 import com.github.sinakarimi81.jdown.dataObjects.Status;
 import com.github.sinakarimi81.jdown.database.DatabaseManager;
 import com.github.sinakarimi81.jdown.exception.FileDataRequestFailedException;
@@ -16,17 +14,17 @@ import java.util.Optional;
 
 import static com.github.sinakarimi81.jdown.common.HttpConstants.*;
 
-public class ItemManager {
+public class DownloadTaskManager {
 
     private final DatabaseManager dbManger;
 
-    public ItemManager(DatabaseManager dbManger) {
+    public DownloadTaskManager(DatabaseManager dbManger) {
         this.dbManger = dbManger;
     }
 
-    public Item createItem(String url, String savedAddress) throws FileDataRequestFailedException {
-        ItemInfo itemInfo = new ItemInfo();
-        itemInfo.setDownloadUrl(url);
+    public DownloadTask createTask(String url, String savedAddress) throws FileDataRequestFailedException {
+        DownloadTask downloadTask = new DownloadTask();
+        downloadTask.setDownloadUrl(url);
         Optional<HttpResponse<Void>> itemData = getItemData(url);
 
         if (itemData.isPresent()) {
@@ -40,31 +38,28 @@ public class ItemManager {
 
             List<String> acceptRanges = headers.get(ACCEPT_RANGES_HEADER.getValue());
             if (acceptRanges != null && !acceptRanges.isEmpty()) {
-                itemInfo.setResumable(true);
+                downloadTask.setResumable(true);
             }
 
             List<String> contentLength = headers.get(CONTENT_LENGTH_HEADER.getValue());
             if (contentLength != null && !contentLength.isEmpty()) {
-                itemInfo.setSize(Long.valueOf(contentLength.get(0)));
+                downloadTask.setSize(Long.valueOf(contentLength.get(0)));
             }
 
             List<String> contentType = headers.get(CONTENT_TYPE_HEADER.getValue());
             if (contentType != null && !contentType.isEmpty()) {
-                itemInfo.setType(contentType.get(0));
+                downloadTask.setType(contentType.get(0));
             }
 
             String fileName = getFileName(url, headers);
-            itemInfo.setName(fileName);
-            itemInfo.setStatus(Status.PAUSED);
-            itemInfo.setSavePath(savedAddress);
+            downloadTask.setName(fileName);
+            downloadTask.setStatus(Status.PAUSED);
+            downloadTask.setSavePath(savedAddress);
         }
 
-        DownloadTask downloadTask = new DownloadTask(itemInfo);
-        Item downloadItem = new Item(itemInfo, downloadTask);
+        dbManger.insert(downloadTask);
 
-        dbManger.insert(downloadItem);
-
-        return downloadItem;
+        return downloadTask;
     }
 
     private String getFileName(String url, Map<String, List<String>> headers) {
@@ -96,7 +91,7 @@ public class ItemManager {
         return Optional.ofNullable(response);
     }
 
-    public List<Item> listAllItems() {
+    public List<DownloadTask> listAllDownloadTasks() {
         return dbManger.getAllItems();
     }
 

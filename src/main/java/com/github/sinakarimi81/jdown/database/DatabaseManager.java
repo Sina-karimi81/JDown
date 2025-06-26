@@ -74,8 +74,8 @@ public class DatabaseManager {
         }
     }
 
-    public void insert(Item item) {
-        log.info("inserting item {} into the database", item.getItemInfo().getName());
+    public void insert(DownloadTask downloadTask) {
+        log.info("inserting download task {} into the database", downloadTask.getName());
         String sql = """
                 INSERT INTO ITEMS(NAME, TYPE, STATUS, SIZE, SAVEPATH, URL, RESUMABLE, DATA) VALUES (? , ? , ? , ? , ? , ? , ? , ?);
                 """;
@@ -83,33 +83,33 @@ public class DatabaseManager {
         try (Connection connection = DriverManager.getConnection(DB_URL);
              PreparedStatement ps = connection.prepareStatement(sql)) {
 
-            ps.setString(1, item.getItemInfo().getName());
-            ps.setString(2, item.getItemInfo().getType());
-            ps.setString(3, item.getItemInfo().getStatus().name());
-            ps.setLong(4, item.getItemInfo().getSize());
-            ps.setString(5, item.getItemInfo().getSavePath());
-            ps.setString(6, item.getItemInfo().getDownloadUrl());
-            ps.setBoolean(7, item.getItemInfo().getResumable());
-            String data = mapper.writeValueAsString(item.getDownloadTask().getSegments());
+            ps.setString(1, downloadTask.getName());
+            ps.setString(2, downloadTask.getType());
+            ps.setString(3, downloadTask.getStatus().name());
+            ps.setLong(4, downloadTask.getSize());
+            ps.setString(5, downloadTask.getSavePath());
+            ps.setString(6, downloadTask.getDownloadUrl());
+            ps.setBoolean(7, downloadTask.getResumable());
+            String data = mapper.writeValueAsString(downloadTask.getSegments());
             ps.setString(8, data);
 
             int i = ps.executeUpdate();
-            log.info("{} record inserted for item {}", i, item.getItemInfo().getName());
+            log.info("{} record inserted for item {}", i, downloadTask.getName());
 
         } catch (Exception e) {
-            log.error("failed to insert item {} in to the database", item, e);
-            throw new DatabaseException("failed to insert an item in to the database", e);
+            log.error("failed to insert download task {} in to the database", downloadTask, e);
+            throw new DatabaseException("failed to insert a download task in to the database", e);
         }
     }
 
-    public void insertAll(List<Item> items) {
-        for (Item item: items) {
-            insert(item);
+    public void insertAll(List<DownloadTask> downloadTasks) {
+        for (DownloadTask downloadTask: downloadTasks) {
+            insert(downloadTask);
         }
     }
 
-    public void update(Item item) {
-        log.info("updating item {} into the database", item.getItemInfo().getName());
+    public void update(DownloadTask downloadTask) {
+        log.info("updating item {} into the database", downloadTask.getName());
         String sql = """
                 UPDATE ITEMS SET NAME = ?, TYPE = ? , STATUS = ? , SIZE = ? , SAVEPATH = ? , URL = ? , RESUMABLE = ? , DATA = ? WHERE NAME = ?;
                 """;
@@ -117,22 +117,22 @@ public class DatabaseManager {
         try (Connection connection = DriverManager.getConnection(DB_URL);
              PreparedStatement ps = connection.prepareStatement(sql)) {
 
-            ps.setString(1, item.getItemInfo().getName());
-            ps.setString(2, item.getItemInfo().getType());
-            ps.setString(3, item.getItemInfo().getStatus().name());
-            ps.setLong(4, item.getItemInfo().getSize());
-            ps.setString(5, item.getItemInfo().getSavePath());
-            ps.setString(6, item.getItemInfo().getDownloadUrl());
-            ps.setBoolean(7, item.getItemInfo().getResumable());
-            String data = mapper.writeValueAsString(item.getDownloadTask().getSegments());
+            ps.setString(1, downloadTask.getName());
+            ps.setString(2, downloadTask.getType());
+            ps.setString(3, downloadTask.getStatus().name());
+            ps.setLong(4, downloadTask.getSize());
+            ps.setString(5, downloadTask.getSavePath());
+            ps.setString(6, downloadTask.getDownloadUrl());
+            ps.setBoolean(7, downloadTask.getResumable());
+            String data = mapper.writeValueAsString(downloadTask.getSegments());
             ps.setString(8, data);
-            ps.setString(9, item.getItemInfo().getName());
+            ps.setString(9, downloadTask.getName());
 
             int i = ps.executeUpdate();
-            log.info("{} record updated for item {}", i, item.getItemInfo().getName());
+            log.info("{} record updated for item {}", i, downloadTask.getName());
 
         } catch (Exception e) {
-            log.error("failed to insert item {} in to the database", item, e);
+            log.error("failed to insert item {} in to the database", downloadTask, e);
             throw new DatabaseException("failed to insert an item in to the database", e);
         }
     }
@@ -174,9 +174,9 @@ public class DatabaseManager {
         }
     }
 
-    public List<Item> getAllItems() {
+    public List<DownloadTask> getAllItems() {
         log.info("getting all items from the database");
-        List<Item> result = new ArrayList<>();
+        List<DownloadTask> result = new ArrayList<>();
 
         String sql = """
                 SELECT * FROM ITEMS;
@@ -191,17 +191,27 @@ public class DatabaseManager {
                 String type = resultSet.getString("TYPE");
                 String status = resultSet.getString("STATUS");
                 long size = resultSet.getLong("SIZE");
-                String savepath = resultSet.getString("SAVEPATH");
+                String savePath = resultSet.getString("SAVEPATH");
                 String url = resultSet.getString("URL");
                 int resumable = resultSet.getInt("RESUMABLE");
 
                 String data = resultSet.getString("DATA");
-                ConcurrentMap<Range, DataSegment> rangeDataSegmentConcurrentMap = mapper.readValue(data, new TypeReference<ConcurrentMap<Range, DataSegment>>() {});
+                ConcurrentMap<Range, DataSegment> rangeDataSegmentConcurrentMap = mapper.readValue(data, new TypeReference<>() {
+                });
 
-                ItemInfo itemInfo = new ItemInfo(name, type, Status.valueOf(status), size, savepath, url, resumable == 1);
-                DownloadTask downloadTask = new DownloadTask(itemInfo, rangeDataSegmentConcurrentMap);
-                Item item = new Item(itemInfo, downloadTask);
-                result.add(item);
+                DownloadTask downloadTask = DownloadTask.builderWithSegment()
+                        .name(name)
+                        .type(type)
+                        .status(Status.valueOf(status))
+                        .size(size)
+                        .savePath(savePath)
+                        .downloadUrl(url)
+                        .resumable(resumable == 1)
+                        .segments(rangeDataSegmentConcurrentMap)
+                        .isPaused(true)
+                        .buildWithSegments();
+
+                result.add(downloadTask);
             }
 
             log.info("finished getting all items from the database, number of records fetched: {}", result.size());
@@ -212,9 +222,9 @@ public class DatabaseManager {
         }
     }
 
-    public Optional<Item> getItemByKey(String key) {
+    public Optional<DownloadTask> getItemByKey(String key) {
         log.info("getting a specific item with name {} from database", key);
-        Item result = null;
+        DownloadTask result = null;
 
         String sql = """
                 SELECT * FROM ITEMS WHERE NAME = ?
@@ -239,9 +249,17 @@ public class DatabaseManager {
                 ConcurrentMap<Range, DataSegment> rangeDataSegmentConcurrentMap = mapper.readValue(data, new TypeReference<>() {
                 });
 
-                ItemInfo itemInfo = new ItemInfo(name, type, Status.valueOf(status), size, savePath, url, resumable == 1);
-                DownloadTask downloadTask = new DownloadTask(itemInfo, rangeDataSegmentConcurrentMap);
-                result = new Item(itemInfo, downloadTask);
+                result = DownloadTask.builderWithSegment()
+                        .name(name)
+                        .type(type)
+                        .status(Status.valueOf(status))
+                        .size(size)
+                        .savePath(savePath)
+                        .downloadUrl(url)
+                        .resumable(resumable == 1)
+                        .isPaused(true)
+                        .segments(rangeDataSegmentConcurrentMap)
+                        .buildWithSegments();
             }
 
             log.info("finished getting item with name {} from the database, record fetched: {}", key, result);

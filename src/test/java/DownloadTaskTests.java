@@ -1,7 +1,10 @@
 import com.github.sinakarimi81.jdown.common.HttpConstants;
-import com.github.sinakarimi81.jdown.dataObjects.*;
+import com.github.sinakarimi81.jdown.dataObjects.DataSegment;
+import com.github.sinakarimi81.jdown.dataObjects.Range;
+import com.github.sinakarimi81.jdown.dataObjects.Status;
 import com.github.sinakarimi81.jdown.database.DatabaseManager;
 import com.github.sinakarimi81.jdown.download.DownloadTask;
+import com.github.sinakarimi81.jdown.exception.DownloadNotResumableException;
 import com.github.tomakehurst.wiremock.WireMockServer;
 import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
 import org.junit.jupiter.api.AfterEach;
@@ -49,11 +52,17 @@ public class DownloadTaskTests {
     Path tempDir;
 
     @Test
+    @SuppressWarnings("unchecked")
     void createRanges_ShouldCreateCorrectRangePartitions() throws Exception {
-        Item item = new Item();
-        ItemInfo info = new ItemInfo("downloadedTestFile.txt", "application/octet-stream", Status.PAUSED, 72L, tempDir.toString(), "http://localhost:9090/testFile.txt", true);
-        item.setItemInfo(info);
-        DownloadTask downloadTask = new DownloadTask(item.getItemInfo());
+        DownloadTask downloadTask = DownloadTask.builder()
+                .name("downloadedTestFile.txt")
+                .type("application/octet-stream")
+                .status(Status.PAUSED)
+                .size(72L)
+                .savePath(tempDir.toString())
+                .downloadUrl("http://localhost:9090/testFile.txt")
+                .resumable(true)
+                .build();
 
         java.lang.reflect.Method createRangesMethod = DownloadTask.class
                 .getDeclaredMethod("createRanges", long.class);
@@ -66,22 +75,27 @@ public class DownloadTaskTests {
     }
 
     @Test
-    public void Given_DownloadItem_Expect_MultipleAsyncRequestsCreated() throws IOException, InterruptedException, ExecutionException {
+    public void Given_DownloadItem_Expect_MultipleAsyncRequestsCreated() throws IOException {
         Path path = Path.of("src/test/resources/testFile.txt");
         byte[] output = Files.readAllBytes(path);
 
-        Item item = new Item();
-        ItemInfo info = new ItemInfo("downloadedTestFile.txt", "application/octet-stream", Status.PAUSED, 72L, tempDir.toString(), "http://localhost:9090/testFile.txt", true);
-        item.setItemInfo(info);
-        DownloadTask downloadTask = new DownloadTask(item.getItemInfo(), false);
+        DownloadTask downloadTask = DownloadTask.builder()
+                .name("downloadedTestFile.txt")
+                .type("application/octet-stream")
+                .status(Status.PAUSED)
+                .size(72L)
+                .savePath(tempDir.toString())
+                .downloadUrl("http://localhost:9090/testFile.txt")
+                .resumable(false)
+                .build();
 
-        List<Range> ranges = createRanges(info.getSize(), downloadTask);
+        List<Range> ranges = createRanges(downloadTask);
         Map<String, byte[]> data = getStringMap(output, ranges, 72);
 
         int index = 1;
         for (Range range : ranges) {
             String rangeValues;
-            if (range.getTo() >= info.getSize()) {
+            if (range.getTo() >= downloadTask.getSize()) {
                 rangeValues = String.format("bytes=%d-", range.getFrom());
             } else {
                 rangeValues = String.format("bytes=%d-%d", range.getFrom(), range.getTo());
@@ -96,36 +110,41 @@ public class DownloadTaskTests {
 
         downloadTask.start();
 
-        File f = new File(info.getSavePath() + "/" + item.getItemInfo().getName());
+        File f = new File(downloadTask.getSavePath() + "/" + downloadTask.getName());
 
         try (Stream<String> lines = Files.lines(path)) {
             downloadTask.waitForDuration(10000);
             assertThat(Files.lines(f.toPath()))
                     .containsExactly(lines.toList().toArray(String[]::new));
             assertTrue(f.delete());
-            assertEquals(Status.COMPLETED, item.getItemInfo().getStatus());
+            assertEquals(Status.COMPLETED, downloadTask.getStatus());
         } catch (Exception e) {
             fail("test failed because an exception occurred", e);
         }
     }
 
     @Test
-    public void Given_DownloadTask_Expect_TobeInsertedInDB() throws IOException, InterruptedException, ExecutionException {
+    public void Given_DownloadTask_Expect_TobeInsertedInDB() throws IOException {
         Path path = Path.of("src/test/resources/testFile.txt");
         byte[] output = Files.readAllBytes(path);
 
-        Item item = new Item();
-        ItemInfo info = new ItemInfo("downloadedTestFile.txt", "application/octet-stream", Status.PAUSED, 72L, tempDir.toString(), "http://localhost:9090/testFile.txt", true);
-        item.setItemInfo(info);
-        DownloadTask downloadTask = new DownloadTask(item.getItemInfo());
+        DownloadTask downloadTask = DownloadTask.builder()
+                .name("downloadedTestFile.txt")
+                .type("application/octet-stream")
+                .status(Status.PAUSED)
+                .size(72L)
+                .savePath(tempDir.toString())
+                .downloadUrl("http://localhost:9090/testFile.txt")
+                .resumable(true)
+                .build();
 
-        List<Range> ranges = createRanges(info.getSize(), downloadTask);
+        List<Range> ranges = createRanges(downloadTask);
         Map<String, byte[]> data = getStringMap(output, ranges, 72);
 
         int index = 1;
         for (Range range : ranges) {
             String rangeValues;
-            if (range.getTo() >= info.getSize()) {
+            if (range.getTo() >= downloadTask.getSize()) {
                 rangeValues = String.format("bytes=%d-", range.getFrom());
             } else {
                 rangeValues = String.format("bytes=%d-%d", range.getFrom(), range.getTo());
@@ -140,28 +159,32 @@ public class DownloadTaskTests {
 
         downloadTask.start();
 
-        item.setDownloadTask(downloadTask);
-
-        assertDoesNotThrow(() -> dbManager.insert(item));
+        assertDoesNotThrow(() -> dbManager.insert(downloadTask));
     }
 
     @Test
-    public void Given_DownloadTask_Expect_TobeInValidState_When_FetchedFromDB() throws IOException, InterruptedException, ExecutionException {
+    public void Given_DownloadTask_Expect_TobeInValidState_When_FetchedFromDB() throws IOException {
         Path path = Path.of("src/test/resources/testFile.txt");
         byte[] output = Files.readAllBytes(path);
 
-        Item item = new Item();
-        ItemInfo info = new ItemInfo("downloadedTestFile.txt", "application/octet-stream", Status.PAUSED, 72L, tempDir.toString(), "http://localhost:9090/testFile.txt", true);
-        item.setItemInfo(info);
-        DownloadTask downloadTask = new DownloadTask(item.getItemInfo());
+        DownloadTask downloadTask = DownloadTask.builder()
+                .name("downloadedTestFile.txt")
+                .type("application/octet-stream")
+                .status(Status.PAUSED)
+                .size(72L)
+                .savePath(tempDir.toString())
+                .downloadUrl("http://localhost:9090/testFile.txt")
+                .resumable(true)
+                .isPaused(true)
+                .build();
 
-        List<Range> ranges = createRanges(info.getSize(), downloadTask);
+        List<Range> ranges = createRanges(downloadTask);
         Map<String, byte[]> data = getStringMap(output, ranges, 72);
 
         int index = 1;
         for (Range range : ranges) {
             String rangeValues;
-            if (range.getTo() >= info.getSize()) {
+            if (range.getTo() >= downloadTask.getSize()) {
                 rangeValues = String.format("bytes=%d-", range.getFrom());
             } else {
                 rangeValues = String.format("bytes=%d-%d", range.getFrom(), range.getTo());
@@ -177,14 +200,12 @@ public class DownloadTaskTests {
         downloadTask.start();
         downloadTask.pause();
 
-        item.setDownloadTask(downloadTask);
-
-        assertDoesNotThrow(() -> dbManager.insert(item));
-        assertEquals(Status.PAUSED, item.getItemInfo().getStatus());
-        Optional<Item> itemByKey = dbManager.getItemByKey(item.getItemInfo().getName());
+        assertDoesNotThrow(() -> dbManager.insert(downloadTask));
+        assertEquals(Status.PAUSED, downloadTask.getStatus());
+        Optional<DownloadTask> itemByKey = dbManager.getItemByKey(downloadTask.getName());
         assertTrue(itemByKey.isPresent());
-        Item fetchedItem = itemByKey.get();
-        ConcurrentMap<Range, DataSegment> segments = fetchedItem.getDownloadTask().getSegments();
+        DownloadTask fetchedDownloadTask = itemByKey.get();
+        ConcurrentMap<Range, DataSegment> segments = fetchedDownloadTask.getSegments();
         Collection<DataSegment> values = segments.values();
         assertThat(segments).containsAllEntriesOf(downloadTask.getSegments());
         assertThat(values).extracting(DataSegment::isComplete).allMatch(ic -> ic.equals(Boolean.FALSE));
@@ -192,22 +213,27 @@ public class DownloadTaskTests {
     }
 
     @Test
-    public void Given_DownloadItem_When_Paused_Expect_DownloadToBePaused() throws IOException, InterruptedException, ExecutionException, TimeoutException {
+    public void Given_DownloadItem_When_Paused_Expect_DownloadToBePaused() throws IOException {
         Path path = Path.of("src/test/resources/testFile.txt");
         byte[] output = Files.readAllBytes(path);
 
-        Item item = new Item();
-        ItemInfo info = new ItemInfo("downloadedTestFile.txt", "application/octet-stream", Status.PAUSED, 72L, tempDir.toString(), "http://localhost:9090/testFile.txt", true);
-        item.setItemInfo(info);
-        DownloadTask downloadTask = new DownloadTask(item.getItemInfo());
+        DownloadTask downloadTask = DownloadTask.builder()
+                .name("downloadedTestFile.txt")
+                .type("application/octet-stream")
+                .status(Status.PAUSED)
+                .size(72L)
+                .savePath(tempDir.toString())
+                .downloadUrl("http://localhost:9090/testFile.txt")
+                .resumable(true)
+                .build();
 
-        List<Range> ranges = createRanges(info.getSize(), downloadTask);
+        List<Range> ranges = createRanges(downloadTask);
         Map<String, byte[]> data = getStringMap(output, ranges, 72);
 
         int index = 1;
         for (Range range : ranges) {
             String rangeValues;
-            if (range.getTo() >= info.getSize()) {
+            if (range.getTo() >= downloadTask.getSize()) {
                 rangeValues = String.format("bytes=%d-", range.getFrom());
             } else {
                 rangeValues = String.format("bytes=%d-%d", range.getFrom(), range.getTo());
@@ -223,30 +249,35 @@ public class DownloadTaskTests {
         downloadTask.start();
         downloadTask.pause();
 
-        File f = new File(info.getSavePath() + "/" + item.getItemInfo().getName());
-        assertEquals(Status.PAUSED, item.getItemInfo().getStatus());
+        File f = new File(downloadTask.getSavePath() + "/" + downloadTask.getName());
+        assertEquals(Status.PAUSED, downloadTask.getStatus());
         assertTrue(downloadTask.isPaused());
         assertFalse(f.exists());
 
     }
 
     @Test
-    public void Given_DownloadItem_When_Paused_Then_Resumed_Expect_DownloadToComplete() throws IOException, InterruptedException, ExecutionException {
+    public void Given_DownloadItem_When_Paused_Then_Resumed_Expect_DownloadToComplete() throws IOException {
         Path path = Path.of("src/test/resources/testFile.txt");
         byte[] output = Files.readAllBytes(path);
 
-        Item item = new Item();
-        ItemInfo info = new ItemInfo("downloadedTestFile.txt", "application/octet-stream", Status.PAUSED, 72L, tempDir.toString(), "http://localhost:9090/testFile.txt", true);
-        item.setItemInfo(info);
-        DownloadTask downloadTask = new DownloadTask(item.getItemInfo());
+        DownloadTask downloadTask = DownloadTask.builder()
+                .name("downloadedTestFile.txt")
+                .type("application/octet-stream")
+                .status(Status.PAUSED)
+                .size(72L)
+                .savePath(tempDir.toString())
+                .downloadUrl("http://localhost:9090/testFile.txt")
+                .resumable(true)
+                .build();
 
-        List<Range> ranges = createRanges(info.getSize(), downloadTask);
+        List<Range> ranges = createRanges(downloadTask);
         Map<String, byte[]> data = getStringMap(output, ranges, 72);
 
         int index = 1;
         for (Range range : ranges) {
             String rangeValues;
-            if (range.getTo() >= info.getSize()) {
+            if (range.getTo() >= downloadTask.getSize()) {
                 rangeValues = String.format("bytes=%d-", range.getFrom());
             } else {
                 rangeValues = String.format("bytes=%d-%d", range.getFrom(), range.getTo());
@@ -263,8 +294,8 @@ public class DownloadTaskTests {
 
         downloadTask.pause();
 
-        File f = new File(info.getSavePath() + "/" + item.getItemInfo().getName());
-        assertEquals(Status.PAUSED, item.getItemInfo().getStatus());
+        File f = new File(downloadTask.getSavePath() + "/" + downloadTask.getName());
+        assertEquals(Status.PAUSED, downloadTask.getStatus());
         assertTrue(downloadTask.isPaused());
         assertFalse(f.exists());
 
@@ -276,29 +307,34 @@ public class DownloadTaskTests {
             assertThat(Files.lines(f.toPath()))
                     .containsExactly(lines.toList().toArray(String[]::new));
             assertTrue(f.delete());
-            assertEquals(Status.COMPLETED, item.getItemInfo().getStatus());
+            assertEquals(Status.COMPLETED, downloadTask.getStatus());
         } catch (Exception e) {
             fail("test failed because an exception occurred", e);
         }
     }
 
     @Test
-    public void Given_DownloadItem_When_Cancelled_Expect_DownloadToBeCancelled() throws IOException, InterruptedException, ExecutionException, TimeoutException {
+    public void Given_DownloadItem_When_Cancelled_Expect_DownloadToBeCancelled() throws IOException {
         Path path = Path.of("src/test/resources/testFile.txt");
         byte[] output = Files.readAllBytes(path);
 
-        Item item = new Item();
-        ItemInfo info = new ItemInfo("downloadedTestFile.txt", "application/octet-stream", Status.PAUSED, 72L, tempDir.toString(), "http://localhost:9090/testFile.txt", true);
-        item.setItemInfo(info);
-        DownloadTask downloadTask = new DownloadTask(item.getItemInfo());
+        DownloadTask downloadTask = DownloadTask.builder()
+                .name("downloadedTestFile.txt")
+                .type("application/octet-stream")
+                .status(Status.PAUSED)
+                .size(72L)
+                .savePath(tempDir.toString())
+                .downloadUrl("http://localhost:9090/testFile.txt")
+                .resumable(true)
+                .build();
 
-        List<Range> ranges = createRanges(info.getSize(), downloadTask);
+        List<Range> ranges = createRanges(downloadTask);
         Map<String, byte[]> data = getStringMap(output, ranges, 72);
 
         int index = 1;
         for (Range range : ranges) {
             String rangeValues;
-            if (range.getTo() >= info.getSize()) {
+            if (range.getTo() >= downloadTask.getSize()) {
                 rangeValues = String.format("bytes=%d-", range.getFrom());
             } else {
                 rangeValues = String.format("bytes=%d-%d", range.getFrom(), range.getTo());
@@ -313,15 +349,34 @@ public class DownloadTaskTests {
 
         downloadTask.start();
 
-        assertEquals(Status.IN_PROGRESS, item.getItemInfo().getStatus());
+        assertEquals(Status.IN_PROGRESS, downloadTask.getStatus());
 
         downloadTask.cancel();
 
-        File f = new File(info.getSavePath() + "/" + item.getItemInfo().getName());
-        assertEquals(Status.CANCELED, item.getItemInfo().getStatus());
+        File f = new File(downloadTask.getSavePath() + "/" + downloadTask.getName());
+        assertEquals(Status.CANCELED, downloadTask.getStatus());
         assertTrue(downloadTask.isCancelled());
         assertFalse(f.exists());
+    }
 
+    @Test
+    public void Given_DownloadItem_When_NotResumable_Expect_PausingToThrowException() {
+        DownloadTask downloadTask = DownloadTask.builder()
+                .name("downloadedTestFile.txt")
+                .type("application/octet-stream")
+                .status(Status.PAUSED)
+                .size(72L)
+                .savePath(tempDir.toString())
+                .downloadUrl("http://localhost:9090/testFile.txt")
+                .resumable(false)
+                .isPaused(true)
+                .build();
+
+        downloadTask.start();
+
+        assertEquals(Status.IN_PROGRESS, downloadTask.getStatus());
+
+        assertThrows(DownloadNotResumableException.class, downloadTask::pause);
     }
 
     private static Map<String, byte[]> getStringMap(byte[] output, List<Range> ranges, int size) {
@@ -335,13 +390,14 @@ public class DownloadTaskTests {
         return data;
     }
 
-    private List<Range> createRanges(long size, DownloadTask downloadTask) {
+    @SuppressWarnings("unchecked")
+    private List<Range> createRanges(DownloadTask downloadTask) {
         try {
             java.lang.reflect.Method createRangesMethod = DownloadTask.class
                     .getDeclaredMethod("createRanges", long.class);
             createRangesMethod.setAccessible(true);
 
-            List<Range> result = (List<Range>) createRangesMethod.invoke(downloadTask, size);
+            List<Range> result = (List<Range>) createRangesMethod.invoke(downloadTask, downloadTask.getSize());
             return result;
         } catch (Exception e) {
             throw new RuntimeException(e);
