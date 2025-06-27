@@ -20,8 +20,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
 import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeoutException;
 import java.util.stream.Stream;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.*;
@@ -202,7 +200,7 @@ public class DownloadTaskTests {
 
         assertDoesNotThrow(() -> dbManager.insert(downloadTask));
         assertEquals(Status.PAUSED, downloadTask.getStatus());
-        Optional<DownloadTask> itemByKey = dbManager.getItemByKey(downloadTask.getName());
+        Optional<DownloadTask> itemByKey = dbManager.getTaskByKey(downloadTask.getName());
         assertTrue(itemByKey.isPresent());
         DownloadTask fetchedDownloadTask = itemByKey.get();
         ConcurrentMap<Range, DataSegment> segments = fetchedDownloadTask.getSegments();

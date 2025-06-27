@@ -74,7 +74,7 @@ public class DownloadTaskManagerTests {
         String savedAddress = "/apt/movies";
         DownloadTask downloadTask = manager.createTask(fileUrl, savedAddress);
 
-        Optional<DownloadTask> itemByKey = dbManager.getItemByKey(downloadTask.getName());
+        Optional<DownloadTask> itemByKey = dbManager.getTaskByKey(downloadTask.getName());
 
         assertTrue(itemByKey.isPresent());
         DownloadTask persistedDownloadTask = itemByKey.get();

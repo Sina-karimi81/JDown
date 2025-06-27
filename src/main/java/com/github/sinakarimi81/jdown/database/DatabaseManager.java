@@ -51,7 +51,7 @@ public class DatabaseManager {
         }
 
         String sql = """
-                CREATE TABLE IF NOT EXISTS ITEMS (
+                CREATE TABLE IF NOT EXISTS TASKS (
                     NAME TEXT PRIMARY KEY,
                     TYPE TEXT,
                     STATUS TEXT,
@@ -69,15 +69,15 @@ public class DatabaseManager {
             ps.execute();
             isTableCreatedBefore = true;
         } catch (Exception e) {
-            log.error("failed to create items table in the database", e);
-            throw new DatabaseException("failed to create items table in the database", e);
+            log.error("failed to create tasks table in the database", e);
+            throw new DatabaseException("failed to create tasks table in the database", e);
         }
     }
 
     public void insert(DownloadTask downloadTask) {
         log.info("inserting download task {} into the database", downloadTask.getName());
         String sql = """
-                INSERT INTO ITEMS(NAME, TYPE, STATUS, SIZE, SAVEPATH, URL, RESUMABLE, DATA) VALUES (? , ? , ? , ? , ? , ? , ? , ?);
+                INSERT INTO TASKS(NAME, TYPE, STATUS, SIZE, SAVEPATH, URL, RESUMABLE, DATA) VALUES (? , ? , ? , ? , ? , ? , ? , ?);
                 """;
 
         try (Connection connection = DriverManager.getConnection(DB_URL);
@@ -94,7 +94,7 @@ public class DatabaseManager {
             ps.setString(8, data);
 
             int i = ps.executeUpdate();
-            log.info("{} record inserted for item {}", i, downloadTask.getName());
+            log.info("{} record inserted for task {}", i, downloadTask.getName());
 
         } catch (Exception e) {
             log.error("failed to insert download task {} in to the database", downloadTask, e);
@@ -109,9 +109,9 @@ public class DatabaseManager {
     }
 
     public void update(DownloadTask downloadTask) {
-        log.info("updating item {} into the database", downloadTask.getName());
+        log.info("updating task {} into the database", downloadTask.getName());
         String sql = """
-                UPDATE ITEMS SET NAME = ?, TYPE = ? , STATUS = ? , SIZE = ? , SAVEPATH = ? , URL = ? , RESUMABLE = ? , DATA = ? WHERE NAME = ?;
+                UPDATE TASKS SET NAME = ?, TYPE = ? , STATUS = ? , SIZE = ? , SAVEPATH = ? , URL = ? , RESUMABLE = ? , DATA = ? WHERE NAME = ?;
                 """;
 
         try (Connection connection = DriverManager.getConnection(DB_URL);
@@ -129,18 +129,18 @@ public class DatabaseManager {
             ps.setString(9, downloadTask.getName());
 
             int i = ps.executeUpdate();
-            log.info("{} record updated for item {}", i, downloadTask.getName());
+            log.info("{} record updated for task {}", i, downloadTask.getName());
 
         } catch (Exception e) {
-            log.error("failed to insert item {} in to the database", downloadTask, e);
-            throw new DatabaseException("failed to insert an item in to the database", e);
+            log.error("failed to insert task {} in to the database", downloadTask, e);
+            throw new DatabaseException("failed to insert an task in to the database", e);
         }
     }
 
     public void delete(String key) {
-        log.info("deleting item {} from database", key);
+        log.info("deleting task {} from database", key);
         String sql = """
-                DELETE FROM ITEMS WHERE NAME = ?;
+                DELETE FROM TASKS WHERE NAME = ?;
                 """;
 
         try (Connection connection = DriverManager.getConnection(DB_URL);
@@ -148,38 +148,38 @@ public class DatabaseManager {
 
             ps.setString(1, key);
             int i = ps.executeUpdate();
-            log.info("{} record deleted from items, item {} was deleted", i, key);
+            log.info("{} record deleted from tasks, task {} was deleted", i, key);
 
         } catch (Exception e) {
-            log.error("failed to delete item {} in to the database", key, e);
-            throw new DatabaseException("failed to delete an item in to the database", e);
+            log.error("failed to delete task {} in to the database", key, e);
+            throw new DatabaseException("failed to delete an task in to the database", e);
         }
     }
 
     public void deleteAll() {
-        log.info("deleting all item from database");
+        log.info("deleting all task from database");
         String sql = """
-                DELETE FROM ITEMS;
+                DELETE FROM TASKS;
                 """;
 
         try (Connection connection = DriverManager.getConnection(DB_URL);
              PreparedStatement ps = connection.prepareStatement(sql)) {
 
             int i = ps.executeUpdate();
-            log.info("{} record deleted from items, all item were deleted", i);
+            log.info("{} record deleted from tasks, all task were deleted", i);
 
         } catch (Exception e) {
-            log.error("failed to delete all item in the database", e);
-            throw new DatabaseException("failed to delete all items in the database", e);
+            log.error("failed to delete all task in the database", e);
+            throw new DatabaseException("failed to delete all tasks in the database", e);
         }
     }
 
-    public List<DownloadTask> getAllItems() {
-        log.info("getting all items from the database");
+    public List<DownloadTask> getAllTasks() {
+        log.info("getting all tasks from the database");
         List<DownloadTask> result = new ArrayList<>();
 
         String sql = """
-                SELECT * FROM ITEMS;
+                SELECT * FROM TASKS;
                 """;
 
         try (Connection connection = DriverManager.getConnection(DB_URL);
@@ -214,20 +214,20 @@ public class DatabaseManager {
                 result.add(downloadTask);
             }
 
-            log.info("finished getting all items from the database, number of records fetched: {}", result.size());
+            log.info("finished getting all tasks from the database, number of records fetched: {}", result.size());
             return result;
         } catch (Exception e) {
-            log.error("failed to fetch all items from database", e);
-            throw new DatabaseException("failed to fetch all items from database", e);
+            log.error("failed to fetch all tasks from database", e);
+            throw new DatabaseException("failed to fetch all tasks from database", e);
         }
     }
 
-    public Optional<DownloadTask> getItemByKey(String key) {
-        log.info("getting a specific item with name {} from database", key);
+    public Optional<DownloadTask> getTaskByKey(String key) {
+        log.info("getting a specific task with name {} from database", key);
         DownloadTask result = null;
 
         String sql = """
-                SELECT * FROM ITEMS WHERE NAME = ?
+                SELECT * FROM TASKS WHERE NAME = ?
                 """;
 
         try (Connection connection = DriverManager.getConnection(DB_URL);
@@ -262,11 +262,11 @@ public class DatabaseManager {
                         .buildWithSegments();
             }
 
-            log.info("finished getting item with name {} from the database, record fetched: {}", key, result);
+            log.info("finished getting task with name {} from the database, record fetched: {}", key, result);
             return Optional.ofNullable(result);
         } catch (Exception e) {
-            log.error("failed to fetch all items from database", e);
-            throw new DatabaseException("failed to fetch all items from database", e);
+            log.error("failed to fetch all tasks from database", e);
+            throw new DatabaseException("failed to fetch all tasks from database", e);
         }
 
     }

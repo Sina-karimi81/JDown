@@ -60,7 +60,7 @@ public class DatabaseManagerTests {
 
     @Test
     void fetchAllData() {
-        List<DownloadTask> allItems = manager.getAllItems();
+        List<DownloadTask> allItems = manager.getAllTasks();
         assertThat(allItems).extracting(DownloadTask::getName).containsExactly("ITEM1", "ITEM2", "ITEM3");
         assertThat(allItems).extracting(DownloadTask::getStatus).containsExactly(Status.PAUSED, Status.ERROR, Status.CANCELED);
         System.out.println(allItems);
@@ -79,25 +79,25 @@ public class DatabaseManagerTests {
                 .build();
 
         assertDoesNotThrow(() -> manager.insert(downloadTask));
-        List<DownloadTask> allItems = manager.getAllItems();
+        List<DownloadTask> allItems = manager.getAllTasks();
         assertEquals(4, allItems.size());
     }
 
     @Test
     void deleteFromDatabase() {
-        List<DownloadTask> allItems = manager.getAllItems();
+        List<DownloadTask> allItems = manager.getAllTasks();
 
         String key = allItems.get(0).getName();
         assertDoesNotThrow(() -> manager.delete(key));
 
-        List<DownloadTask> allItemsAfterDelete = manager.getAllItems();
+        List<DownloadTask> allItemsAfterDelete = manager.getAllTasks();
         assertEquals(2, allItemsAfterDelete.size());
         assertThat(allItemsAfterDelete).extracting(DownloadTask::getName).doesNotContain(key);
     }
 
     @Test
     void updateAnItem() {
-        List<DownloadTask> allItems = manager.getAllItems();
+        List<DownloadTask> allItems = manager.getAllTasks();
         DownloadTask downloadTask = allItems.get(0);
 
         String oldValue = downloadTask.getSavePath();
@@ -105,7 +105,7 @@ public class DatabaseManagerTests {
         downloadTask.setSavePath(newValue);
 
         assertDoesNotThrow(() -> manager.update(downloadTask));
-        List<DownloadTask> allItemsAfterUpdate = manager.getAllItems();
+        List<DownloadTask> allItemsAfterUpdate = manager.getAllTasks();
         DownloadTask newDownloadTask = allItemsAfterUpdate.get(0);
         assertNotEquals(oldValue, newDownloadTask.getSavePath());
         assertEquals(newValue, newDownloadTask.getSavePath());

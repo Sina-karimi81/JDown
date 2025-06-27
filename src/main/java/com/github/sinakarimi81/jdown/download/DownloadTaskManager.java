@@ -92,7 +92,7 @@ public class DownloadTaskManager {
     }
 
     public List<DownloadTask> listAllDownloadTasks() {
-        return dbManger.getAllItems();
+        return dbManger.getAllTasks();
     }
 
 }
