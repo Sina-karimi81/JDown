@@ -22,7 +22,7 @@ Before running JDown, ensure you have the following installed:
 
 ## 🛠️ Installation
 
-### Option 2: Build from Source
+### Option 1: Build from Source
 1. Clone the repository:
    ```bash
    git clone https://github.com/Sina-karimi81/JDown.git
