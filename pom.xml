@@ -10,6 +10,11 @@
     <name>JDown</name>
 
     <description>An Opensource alternative to IDM application</description>
+    <developers>
+        <developer>
+            <name>Sina Karimi</name>
+        </developer>
+    </developers>
 
     <properties>
         <maven.compiler.source>17</maven.compiler.source>
@@ -80,6 +85,11 @@
         <dependency>
             <groupId>org.kordamp.ikonli</groupId>
             <artifactId>ikonli-javafx</artifactId>
+            <version>12.3.1</version>
+        </dependency>
+        <dependency>
+            <groupId>org.kordamp.ikonli</groupId>
+            <artifactId>ikonli-fontawesome5-pack</artifactId>
             <version>12.3.1</version>
         </dependency>
         <dependency>
@@ -191,7 +201,7 @@
                         <!-- Default configuration for running with: mvn clean javafx:run -->
                         <id>default-cli</id>
                         <configuration>
-                            <mainClass>com.github.sinakarimi81.jdown/com.github.sinakarimi81.jdown.HelloApplication
+                            <mainClass>com.github.sinakarimi81.jdown/com.github.sinakarimi.jdown.JDownApplication
                             </mainClass>
                             <launcher>app</launcher>
                             <jlinkZipName>app</jlinkZipName>
