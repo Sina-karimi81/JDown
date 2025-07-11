@@ -19,7 +19,7 @@
         </encoder>
     </appender>
 
-    <logger name="com.github.sinakarimi81.jdown" level="debug">
+    <logger name="com.github.sinakarimi.jdown" level="debug">
         <appender-ref ref="console" />
     </logger>
 
