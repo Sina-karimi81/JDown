@@ -1,10 +1,9 @@
 package com.github.sinakarimi.jdown;
 
 import com.github.sinakarimi.jdown.dataObjects.Status;
-import com.github.sinakarimi.jdown.database.DatabaseManager;
+import com.github.sinakarimi.jdown.database.TasksDAO;
 import com.github.sinakarimi.jdown.download.DownloadTask;
-import javafx.beans.property.SimpleStringProperty;
-import javafx.beans.value.ObservableObjectValue;
+import javafx.collections.ObservableList;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -17,9 +16,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.*;
 
 @ExtendWith(MockitoExtension.class)
-public class DatabaseManagerTests {
+public class TasksDAOTests {
 
-    private final DatabaseManager manager = DatabaseManager.getInstance("testDb");
+    private final TasksDAO manager = TasksDAO.getInstance("testDb");
 
     @BeforeEach()
     public void setup() {
@@ -64,9 +63,14 @@ public class DatabaseManagerTests {
 
     @Test
     void fetchAllData() {
-        List<DownloadTask> allItems = manager.getAllTasks();
-        assertThat(allItems).extracting(DownloadTask::getNameProperty).extracting(SimpleStringProperty::get).containsExactly("ITEM1", "ITEM2", "ITEM3");
-        assertThat(allItems).extracting(DownloadTask::getStatusProperty).extracting(ObservableObjectValue::get).containsExactly(Status.PAUSED, Status.ERROR, Status.CANCELED);
+        // since we are inserting data before each test, to make it consistent we have to clear the tasksList
+        ObservableList<DownloadTask> allItems = manager.getTasksList();
+        allItems.clear();
+
+        manager.loadAllTasks();
+        allItems = manager.getTasksList();
+        assertThat(allItems).extracting(DownloadTask::getName).containsExactly("ITEM1", "ITEM2", "ITEM3");
+        assertThat(allItems).extracting(DownloadTask::getStatus).containsExactly(Status.PAUSED, Status.ERROR, Status.CANCELED);
         System.out.println(allItems);
     }
 
@@ -83,36 +87,40 @@ public class DatabaseManagerTests {
                 .build();
 
         assertDoesNotThrow(() -> manager.insert(downloadTask));
-        List<DownloadTask> allItems = manager.getAllTasks();
+        ObservableList<DownloadTask> allItems = manager.getTasksList();
         assertEquals(4, allItems.size());
     }
 
     @Test
     void deleteFromDatabase() {
-        List<DownloadTask> allItems = manager.getAllTasks();
+        ObservableList<DownloadTask> allItems = manager.getTasksList();
 
-        String key = allItems.get(0).getNameProperty().get();
+        String key = allItems.get(0).getName();
         assertDoesNotThrow(() -> manager.delete(key));
 
-        List<DownloadTask> allItemsAfterDelete = manager.getAllTasks();
+        ObservableList<DownloadTask> allItemsAfterDelete = manager.getTasksList();
         assertEquals(2, allItemsAfterDelete.size());
-        assertThat(allItemsAfterDelete).extracting(DownloadTask::getNameProperty).extracting(SimpleStringProperty::get).doesNotContain(key);
+        assertThat(allItemsAfterDelete).extracting(DownloadTask::getName).doesNotContain(key);
     }
 
     @Test
     void updateAnItem() {
-        List<DownloadTask> allItems = manager.getAllTasks();
+        manager.loadAllTasks();
+        ObservableList<DownloadTask> allItems = manager.getTasksList();
         DownloadTask downloadTask = allItems.get(0);
+
+        String pk = downloadTask.getName();
 
         String oldValue = downloadTask.getSavePath();
         String newValue = "opt/sina/test/";
         downloadTask.setSavePath(newValue);
 
-        assertDoesNotThrow(() -> manager.update(downloadTask));
-        List<DownloadTask> allItemsAfterUpdate = manager.getAllTasks();
+        assertDoesNotThrow(() -> manager.update(pk, downloadTask));
+        manager.loadAllTasks();
+        ObservableList<DownloadTask> allItemsAfterUpdate = manager.getTasksList();
         DownloadTask newDownloadTask = allItemsAfterUpdate.get(0);
         assertNotEquals(oldValue, newDownloadTask.getSavePath());
         assertEquals(newValue, newDownloadTask.getSavePath());
-        assertEquals(downloadTask.getNameProperty().get(), newDownloadTask.getNameProperty().get());
+        assertEquals(downloadTask.getName(), newDownloadTask.getName());
     }
 }

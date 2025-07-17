@@ -10,6 +10,9 @@ import java.io.IOException;
 public class JDownApplication extends Application {
     @Override
     public void start(Stage stage) throws IOException {
+
+        ClassManager.load();
+
         FXMLLoader fxmlLoader = new FXMLLoader(JDownApplication.class.getResource("DownloadManagerView.fxml"));
         Scene scene = new Scene(fxmlLoader.load(), 800, 600);
         stage.setTitle("JDown");

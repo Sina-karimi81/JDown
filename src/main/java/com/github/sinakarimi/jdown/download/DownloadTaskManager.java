@@ -1,8 +1,9 @@
 package com.github.sinakarimi.jdown.download;
 
 import com.github.sinakarimi.jdown.dataObjects.Status;
-import com.github.sinakarimi.jdown.database.DatabaseManager;
+import com.github.sinakarimi.jdown.database.TasksDAO;
 import com.github.sinakarimi.jdown.exception.FileDataRequestFailedException;
+import javafx.collections.ObservableList;
 
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -16,10 +17,20 @@ import static com.github.sinakarimi.jdown.common.HttpConstants.*;
 
 public class DownloadTaskManager {
 
-    private final DatabaseManager dbManger;
+    public static DownloadTaskManager INSTANCE = null;
 
-    public DownloadTaskManager(DatabaseManager dbManger) {
+    private final TasksDAO dbManger;
+
+    private DownloadTaskManager(TasksDAO dbManger) {
         this.dbManger = dbManger;
+    }
+
+    public static DownloadTaskManager getInstance(TasksDAO dbManger) {
+        if (INSTANCE == null) {
+            INSTANCE = new DownloadTaskManager(dbManger);
+        }
+
+        return INSTANCE;
     }
 
     public DownloadTask createTask(String url, String savedAddress) throws FileDataRequestFailedException {
@@ -57,9 +68,11 @@ public class DownloadTaskManager {
             downloadTask.setSavePath(savedAddress);
         }
 
-        dbManger.insert(downloadTask);
-
         return downloadTask;
+    }
+
+    public void saveTask(DownloadTask downloadTask) {
+        dbManger.insert(downloadTask);
     }
 
     private String getFileName(String url, Map<String, List<String>> headers) {
@@ -91,8 +104,9 @@ public class DownloadTaskManager {
         return Optional.ofNullable(response);
     }
 
-    public List<DownloadTask> listAllDownloadTasks() {
-        return dbManger.getAllTasks();
+    public ObservableList<DownloadTask> listAllDownloadTasks() {
+        dbManger.loadAllTasks();
+        return dbManger.getTasksList();
     }
 
 }

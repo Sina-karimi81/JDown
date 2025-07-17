@@ -6,6 +6,9 @@ import com.github.sinakarimi.jdown.dataObjects.Range;
 
 import java.io.IOException;
 
+/**
+ * Used to Serialize the key of a Map that is of type Range
+ */
 public class RangeDeserializer extends KeyDeserializer {
 
     @Override

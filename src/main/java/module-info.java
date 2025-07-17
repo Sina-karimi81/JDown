@@ -14,6 +14,8 @@ module com.github.sinakarimi.jdown {
     requires org.xerial.sqlitejdbc;
     requires org.slf4j;
     requires com.fasterxml.jackson.databind;
+    requires org.kordamp.ikonli.core;
+    requires javafx.swing;
 
     opens com.github.sinakarimi.jdown to javafx.fxml;
     exports com.github.sinakarimi.jdown;

@@ -1,6 +1,7 @@
 package com.github.sinakarimi.jdown.download;
 
 import com.github.sinakarimi.jdown.common.HttpUtils;
+import com.github.sinakarimi.jdown.configuration.ConfigurationConstants;
 import com.github.sinakarimi.jdown.configuration.ConfigurationUtils;
 import com.github.sinakarimi.jdown.dataObjects.DataSegment;
 import com.github.sinakarimi.jdown.dataObjects.Range;
@@ -10,6 +11,7 @@ import com.github.sinakarimi.jdown.exception.DownloadFailedException;
 import com.github.sinakarimi.jdown.exception.DownloadNotResumableException;
 import javafx.beans.property.*;
 import lombok.Builder;
+import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
@@ -31,10 +33,16 @@ import static com.github.sinakarimi.jdown.common.HttpConstants.GET_METHOD;
 import static com.github.sinakarimi.jdown.common.HttpConstants.RANGE;
 
 @Slf4j
+@EqualsAndHashCode
 public class DownloadTask {
 
     @Getter
     private final ConcurrentMap<Range, DataSegment> segments;
+
+    /**
+     * Using property classes makes coding easier since they automatically bind to the values change event,
+     * and we don't have to do any computation to check for changes
+     */
     @Getter
     private SimpleStringProperty nameProperty;
     @Getter
@@ -56,17 +64,19 @@ public class DownloadTask {
     @Getter
     @Setter
     private SimpleDoubleProperty progressProperty;
+    @Getter
+    private SimpleStringProperty descriptionProperty;
 
     private CompletableFuture<Void> downloadTask;
-    private final ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
-    private volatile boolean isPaused = false;
+
+    private volatile boolean isPaused = true;
 
     public DownloadTask() {
         segments = new ConcurrentHashMap<>();
     }
 
     @Builder
-    public DownloadTask(String name, String type, Status status, Long size, String savePath, String downloadUrl, Boolean resumable, boolean isPaused) {
+    public DownloadTask(String name, String type, Status status, Long size, String savePath, String downloadUrl, Boolean resumable, String description, boolean isPaused) {
         this.nameProperty = new SimpleStringProperty(name);
         this.type = type;
         this.statusProperty = new SimpleObjectProperty<>(status);
@@ -75,11 +85,13 @@ public class DownloadTask {
         this.downloadUrl = downloadUrl;
         this.resumable = resumable;
         this.isPaused = isPaused;
+        this.descriptionProperty = new SimpleStringProperty(description);
         this.segments = new ConcurrentHashMap<>();
     }
 
+    // if a different wasn't used, lombok wouldn't recognize the new field
     @Builder(builderMethodName = "builderWithSegment", buildMethodName = "buildWithSegments")
-    public DownloadTask(String name, String type, Status status, Long size, String savePath, String downloadUrl, Boolean resumable, boolean isPaused, ConcurrentMap<Range, DataSegment> segments) {
+    public DownloadTask(String name, String type, Status status, Long size, String savePath, String downloadUrl, Boolean resumable, String description, boolean isPaused, ConcurrentMap<Range, DataSegment> segments) {
         this.nameProperty = new SimpleStringProperty(name);
         this.type = type;
         this.statusProperty = new SimpleObjectProperty<>(status);
@@ -88,7 +100,40 @@ public class DownloadTask {
         this.downloadUrl = downloadUrl;
         this.resumable = resumable;
         this.isPaused = isPaused;
+        this.descriptionProperty = new SimpleStringProperty(description);
         this.segments = segments;
+    }
+
+    /**
+     * a simple convenience method
+     * @return name of downloadTask
+     */
+    public String getName() {
+        return nameProperty.get();
+    }
+
+    /**
+     * a simple convenience method
+     * @return status of downloadTask
+     */
+    public Status getStatus() {
+        return statusProperty.get();
+    }
+
+    /**
+     * a simple convenience method
+     * @return size of downloadTask
+     */
+    public Long getSize() {
+        return sizeProperty.get();
+    }
+
+    /**
+     * a simple convenience method
+     * @return description of downloadTask
+     */
+    public String getDescription() {
+        return descriptionProperty.get();
     }
 
     public void setNameProperty(String name) {
@@ -115,6 +160,14 @@ public class DownloadTask {
         }
     }
 
+    public void setDescriptionProperty(String description) {
+        if (descriptionProperty == null) {
+            descriptionProperty = new SimpleStringProperty(description);
+        } else {
+            descriptionProperty.set(description);
+        }
+    }
+
     public void cancel() {
         log.info("cancelling the download of file {}", nameProperty.get());
         boolean cancel = downloadTask.cancel(true);
@@ -128,30 +181,20 @@ public class DownloadTask {
     }
 
     public void pause() {
-        lock.writeLock().lock();
-        try {
-            if (!resumable) {
-                String message = String.format("download of file %s cannot be paused!", nameProperty.get());
-                throw new DownloadNotResumableException(message);
-            }
-
-            isPaused = true;
-            statusProperty.set(Status.PAUSED);
-            log.info("set item {} to paused status, isPaused: {}", nameProperty.get(), isPaused);
-        } finally {
-            lock.writeLock().unlock();
+        if (!resumable) {
+            String message = String.format("download of file %s cannot be paused!", nameProperty.get());
+            throw new DownloadNotResumableException(message);
         }
+
+        isPaused = true;
+        statusProperty.set(Status.PAUSED);
+        log.info("set item {} to paused status, isPaused: {}", nameProperty.get(), isPaused);
     }
 
     public void resume() {
-        lock.writeLock().lock();
-        try {
-            isPaused = false;
-            statusProperty.set(Status.IN_PROGRESS);
-            log.info("set item {} to in progress status, isPaused: {}", nameProperty.get(), isPaused);
-        } finally {
-            lock.writeLock().unlock();
-        }
+        isPaused = false;
+        statusProperty.set(Status.IN_PROGRESS);
+        log.info("set item {} to in progress status, isPaused: {}", nameProperty.get(), isPaused);
     }
 
     public boolean isPaused() {
@@ -227,7 +270,7 @@ public class DownloadTask {
     private List<Range> createRanges(long size) {
         List<Range> ranges = new ArrayList<>();
 
-        Integer numberOfThreads = ConfigurationUtils.getConfig(ConfigurationUtils.ConfigurationConstants.NUMBER_OF_THREADS, Integer.class);
+        Integer numberOfThreads = ConfigurationUtils.getConfig(ConfigurationConstants.NUMBER_OF_THREADS, Integer.class);
 
         int interval = (int) Math.floorDiv(size, numberOfThreads);
         int start = 0;

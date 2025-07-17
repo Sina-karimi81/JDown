@@ -2,7 +2,7 @@ package com.github.sinakarimi.jdown;
 
 import com.github.sinakarimi.jdown.common.HttpConstants;
 import com.github.sinakarimi.jdown.dataObjects.Status;
-import com.github.sinakarimi.jdown.database.DatabaseManager;
+import com.github.sinakarimi.jdown.database.TasksDAO;
 import com.github.sinakarimi.jdown.download.DownloadTask;
 import com.github.sinakarimi.jdown.download.DownloadTaskManager;
 import com.github.sinakarimi.jdown.exception.FileDataRequestFailedException;
@@ -28,8 +28,8 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 public class DownloadTaskManagerTests {
 
-    private static final DatabaseManager dbManager = DatabaseManager.getInstance("testDb");
-    private final DownloadTaskManager manager = new DownloadTaskManager(dbManager);
+    private static final TasksDAO dbManager = TasksDAO.getInstance("testDb");
+    private final DownloadTaskManager manager = DownloadTaskManager.getInstance(dbManager);
     private MockedStatic<HttpClient> mockedHttpClient;
 
     @BeforeEach
@@ -55,13 +55,13 @@ public class DownloadTaskManagerTests {
         String savedAddress = "/apt/movies";
         DownloadTask downloadTask = manager.createTask(fileUrl, savedAddress);
 
-        assertEquals("someMovie.mkv", downloadTask.getNameProperty().get());
+        assertEquals("someMovie.mkv", downloadTask.getName());
         assertEquals("application/octet-stream", downloadTask.getType());
         assertEquals(savedAddress, downloadTask.getSavePath());
         assertEquals(fileUrl, downloadTask.getDownloadUrl());
         assertTrue(downloadTask.getResumable());
-        assertEquals(71841045L, downloadTask.getSizeProperty().get());
-        assertEquals(Status.PAUSED, downloadTask.getStatusProperty().get());
+        assertEquals(71841045L, downloadTask.getSize());
+        assertEquals(Status.PAUSED, downloadTask.getStatus());
     }
 
     @Test
@@ -76,17 +76,17 @@ public class DownloadTaskManagerTests {
         String savedAddress = "/apt/movies";
         DownloadTask downloadTask = manager.createTask(fileUrl, savedAddress);
 
-        Optional<DownloadTask> itemByKey = dbManager.getTaskByKey(downloadTask.getNameProperty().get());
+        Optional<DownloadTask> itemByKey = dbManager.getTaskByKey(downloadTask.getName());
 
         assertTrue(itemByKey.isPresent());
         DownloadTask persistedDownloadTask = itemByKey.get();
-        assertEquals("someMovie.mkv", persistedDownloadTask.getNameProperty().get());
+        assertEquals("someMovie.mkv", persistedDownloadTask.getName());
         assertEquals("application/octet-stream", persistedDownloadTask.getType());
         assertEquals(savedAddress, persistedDownloadTask.getSavePath());
         assertEquals(fileUrl, persistedDownloadTask.getDownloadUrl());
         assertTrue(persistedDownloadTask.getResumable());
-        assertEquals(71841045L, persistedDownloadTask.getSizeProperty().get());
-        assertEquals(Status.PAUSED, persistedDownloadTask.getStatusProperty().get());
+        assertEquals(71841045L, persistedDownloadTask.getSize());
+        assertEquals(Status.PAUSED, persistedDownloadTask.getStatus());
     }
 
     @Test
@@ -101,13 +101,13 @@ public class DownloadTaskManagerTests {
         String savedAddress = "/apt/movies";
         DownloadTask downloadTask = manager.createTask(fileUrl, savedAddress);
 
-        assertEquals("bigMovie.mkv", downloadTask.getNameProperty().get());
+        assertEquals("bigMovie.mkv", downloadTask.getName());
         assertEquals("application/octet-stream", downloadTask.getType());
         assertEquals(savedAddress, downloadTask.getSavePath());
         assertEquals(fileUrl, downloadTask.getDownloadUrl());
         assertTrue(downloadTask.getResumable());
-        assertEquals(71841045L, downloadTask.getSizeProperty().get());
-        assertEquals(Status.PAUSED, downloadTask.getStatusProperty().get());
+        assertEquals(71841045L, downloadTask.getSize());
+        assertEquals(Status.PAUSED, downloadTask.getStatus());
     }
 
     @Test

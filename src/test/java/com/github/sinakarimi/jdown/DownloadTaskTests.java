@@ -4,7 +4,7 @@ import com.github.sinakarimi.jdown.common.HttpConstants;
 import com.github.sinakarimi.jdown.dataObjects.DataSegment;
 import com.github.sinakarimi.jdown.dataObjects.Range;
 import com.github.sinakarimi.jdown.dataObjects.Status;
-import com.github.sinakarimi.jdown.database.DatabaseManager;
+import com.github.sinakarimi.jdown.database.TasksDAO;
 import com.github.sinakarimi.jdown.download.DownloadTask;
 import com.github.sinakarimi.jdown.exception.DownloadNotResumableException;
 import com.github.tomakehurst.wiremock.WireMockServer;
@@ -30,7 +30,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 @ExtendWith(MockitoExtension.class)
 public class DownloadTaskTests {
-    private final DatabaseManager dbManager = DatabaseManager.getInstance("testDb");
+    private final TasksDAO dbManager = TasksDAO.getInstance("testDb");
     private WireMockServer wireMockServer;
 
     @BeforeEach
@@ -95,7 +95,7 @@ public class DownloadTaskTests {
         int index = 1;
         for (Range range : ranges) {
             String rangeValues;
-            if (range.getTo() >= downloadTask.getSizeProperty().get()) {
+            if (range.getTo() >= downloadTask.getSize()) {
                 rangeValues = String.format("bytes=%d-", range.getFrom());
             } else {
                 rangeValues = String.format("bytes=%d-%d", range.getFrom(), range.getTo());
@@ -110,14 +110,14 @@ public class DownloadTaskTests {
 
         downloadTask.start();
 
-        File f = new File(downloadTask.getSavePath() + "/" + downloadTask.getNameProperty().get());
+        File f = new File(downloadTask.getSavePath() + "/" + downloadTask.getName());
 
         try (Stream<String> lines = Files.lines(path)) {
             downloadTask.waitForDuration(10000);
             assertThat(Files.lines(f.toPath()))
                     .containsExactly(lines.toList().toArray(String[]::new));
             assertTrue(f.delete());
-            assertEquals(Status.COMPLETED, downloadTask.getStatusProperty().get());
+            assertEquals(Status.COMPLETED, downloadTask.getStatus());
         } catch (Exception e) {
             fail("test failed because an exception occurred", e);
         }
@@ -144,7 +144,7 @@ public class DownloadTaskTests {
         int index = 1;
         for (Range range : ranges) {
             String rangeValues;
-            if (range.getTo() >= downloadTask.getSizeProperty().get()) {
+            if (range.getTo() >= downloadTask.getSize()) {
                 rangeValues = String.format("bytes=%d-", range.getFrom());
             } else {
                 rangeValues = String.format("bytes=%d-%d", range.getFrom(), range.getTo());
@@ -184,7 +184,7 @@ public class DownloadTaskTests {
         int index = 1;
         for (Range range : ranges) {
             String rangeValues;
-            if (range.getTo() >= downloadTask.getSizeProperty().get()) {
+            if (range.getTo() >= downloadTask.getSize()) {
                 rangeValues = String.format("bytes=%d-", range.getFrom());
             } else {
                 rangeValues = String.format("bytes=%d-%d", range.getFrom(), range.getTo());
@@ -201,8 +201,8 @@ public class DownloadTaskTests {
         downloadTask.pause();
 
         assertDoesNotThrow(() -> dbManager.insert(downloadTask));
-        assertEquals(Status.PAUSED, downloadTask.getStatusProperty().get());
-        Optional<DownloadTask> itemByKey = dbManager.getTaskByKey(downloadTask.getNameProperty().get());
+        assertEquals(Status.PAUSED, downloadTask.getStatus());
+        Optional<DownloadTask> itemByKey = dbManager.getTaskByKey(downloadTask.getName());
         assertTrue(itemByKey.isPresent());
         DownloadTask fetchedDownloadTask = itemByKey.get();
         ConcurrentMap<Range, DataSegment> segments = fetchedDownloadTask.getSegments();
@@ -233,7 +233,7 @@ public class DownloadTaskTests {
         int index = 1;
         for (Range range : ranges) {
             String rangeValues;
-            if (range.getTo() >= downloadTask.getSizeProperty().get()) {
+            if (range.getTo() >= downloadTask.getSize()) {
                 rangeValues = String.format("bytes=%d-", range.getFrom());
             } else {
                 rangeValues = String.format("bytes=%d-%d", range.getFrom(), range.getTo());
@@ -249,8 +249,8 @@ public class DownloadTaskTests {
         downloadTask.start();
         downloadTask.pause();
 
-        File f = new File(downloadTask.getSavePath() + "/" + downloadTask.getNameProperty());
-        assertEquals(Status.PAUSED, downloadTask.getStatusProperty().get());
+        File f = new File(downloadTask.getSavePath() + "/" + downloadTask.getName());
+        assertEquals(Status.PAUSED, downloadTask.getStatus());
         assertTrue(downloadTask.isPaused());
         assertFalse(f.exists());
 
@@ -277,7 +277,7 @@ public class DownloadTaskTests {
         int index = 1;
         for (Range range : ranges) {
             String rangeValues;
-            if (range.getTo() >= downloadTask.getSizeProperty().get()) {
+            if (range.getTo() >= downloadTask.getSize()) {
                 rangeValues = String.format("bytes=%d-", range.getFrom());
             } else {
                 rangeValues = String.format("bytes=%d-%d", range.getFrom(), range.getTo());
@@ -294,8 +294,8 @@ public class DownloadTaskTests {
 
         downloadTask.pause();
 
-        File f = new File(downloadTask.getSavePath() + "/" + downloadTask.getNameProperty().get());
-        assertEquals(Status.PAUSED, downloadTask.getStatusProperty().get());
+        File f = new File(downloadTask.getSavePath() + "/" + downloadTask.getName());
+        assertEquals(Status.PAUSED, downloadTask.getStatus());
         assertTrue(downloadTask.isPaused());
         assertFalse(f.exists());
 
@@ -307,7 +307,7 @@ public class DownloadTaskTests {
             assertThat(Files.lines(f.toPath()))
                     .containsExactly(lines.toList().toArray(String[]::new));
             assertTrue(f.delete());
-            assertEquals(Status.COMPLETED, downloadTask.getStatusProperty().get());
+            assertEquals(Status.COMPLETED, downloadTask.getStatus());
         } catch (Exception e) {
             fail("test failed because an exception occurred", e);
         }
@@ -334,7 +334,7 @@ public class DownloadTaskTests {
         int index = 1;
         for (Range range : ranges) {
             String rangeValues;
-            if (range.getTo() >= downloadTask.getSizeProperty().get()) {
+            if (range.getTo() >= downloadTask.getSize()) {
                 rangeValues = String.format("bytes=%d-", range.getFrom());
             } else {
                 rangeValues = String.format("bytes=%d-%d", range.getFrom(), range.getTo());
@@ -349,12 +349,12 @@ public class DownloadTaskTests {
 
         downloadTask.start();
 
-        assertEquals(Status.IN_PROGRESS, downloadTask.getStatusProperty().get());
+        assertEquals(Status.IN_PROGRESS, downloadTask.getStatus());
 
         downloadTask.cancel();
 
-        File f = new File(downloadTask.getSavePath() + "/" + downloadTask.getNameProperty().get());
-        assertEquals(Status.CANCELED, downloadTask.getStatusProperty().get());
+        File f = new File(downloadTask.getSavePath() + "/" + downloadTask.getName());
+        assertEquals(Status.CANCELED, downloadTask.getStatus());
         assertTrue(downloadTask.isCancelled());
         assertFalse(f.exists());
     }
@@ -374,7 +374,7 @@ public class DownloadTaskTests {
 
         downloadTask.start();
 
-        assertEquals(Status.IN_PROGRESS, downloadTask.getStatusProperty().get());
+        assertEquals(Status.IN_PROGRESS, downloadTask.getStatus());
 
         assertThrows(DownloadNotResumableException.class, downloadTask::pause);
     }
@@ -397,7 +397,7 @@ public class DownloadTaskTests {
                     .getDeclaredMethod("createRanges", long.class);
             createRangesMethod.setAccessible(true);
 
-            List<Range> result = (List<Range>) createRangesMethod.invoke(downloadTask, downloadTask.getSizeProperty().get());
+            List<Range> result = (List<Range>) createRangesMethod.invoke(downloadTask, downloadTask.getSize());
             return result;
         } catch (Exception e) {
             throw new RuntimeException(e);

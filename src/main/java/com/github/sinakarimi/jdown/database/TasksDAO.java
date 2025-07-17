@@ -1,8 +1,11 @@
 package com.github.sinakarimi.jdown.database;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.module.SimpleModule;
+import com.github.sinakarimi.jdown.configuration.ConfigurationConstants;
+import com.github.sinakarimi.jdown.configuration.ConfigurationUtils;
 import com.github.sinakarimi.jdown.dataObjects.DataSegment;
 import com.github.sinakarimi.jdown.dataObjects.Range;
 import com.github.sinakarimi.jdown.dataObjects.Status;
@@ -10,37 +13,43 @@ import com.github.sinakarimi.jdown.download.DownloadTask;
 import com.github.sinakarimi.jdown.exception.DatabaseException;
 import com.github.sinakarimi.jdown.serialization.RangeDeserializer;
 import com.github.sinakarimi.jdown.serialization.RangeSerializer;
+import javafx.collections.FXCollections;
+import javafx.collections.ObservableList;
+import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
-import java.sql.Connection;
-import java.sql.DriverManager;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.util.ArrayList;
+import java.sql.*;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentMap;
 
 @Slf4j
-public class DatabaseManager {
+public class TasksDAO {
 
     private String DB_URL = "jdbc:sqlite:";
-    private static DatabaseManager INSTANCE = null;
+    private static TasksDAO INSTANCE = null;
     private final ObjectMapper mapper;
-    private boolean isTableCreatedBefore = false;
 
-    public static DatabaseManager getInstance(String dbName) {
+    /**
+     * utility class used to create Collection Framework classes. provides the same functionalities
+     */
+    @Getter
+    private final ObservableList<DownloadTask> tasksList = FXCollections.observableArrayList();
+
+    public static TasksDAO getInstance(String dbName) {
         if (INSTANCE == null) {
-            INSTANCE = new DatabaseManager(dbName);
+            INSTANCE = new TasksDAO(dbName);
             INSTANCE.createTable();
         }
 
         return INSTANCE;
     }
 
-    private DatabaseManager(String dbName) {
+    private TasksDAO(String dbName) {
         DB_URL += dbName;
         SimpleModule module = new SimpleModule();
+
+        // used for serializing and deserializing Map Objects keys
         module.addKeySerializer(Range.class, new RangeSerializer());
         module.addKeyDeserializer(Range.class, new RangeDeserializer());
         mapper = new ObjectMapper();
@@ -48,6 +57,7 @@ public class DatabaseManager {
     }
 
     private void createTable() {
+        Boolean isTableCreatedBefore = ConfigurationUtils.getConfig(ConfigurationConstants.TASKS_TABLES_CREATED, Boolean.class);
         if (isTableCreatedBefore) {
             return;
         }
@@ -61,6 +71,7 @@ public class DatabaseManager {
                     SAVEPATH TEXT,
                     URL TEXT,
                     RESUMABLE INTEGER,
+                    DESCRIPTION TEXT,
                     DATA TEXT
                 );
                 """;
@@ -69,7 +80,7 @@ public class DatabaseManager {
              PreparedStatement ps = connection.prepareStatement(sql)) {
 
             ps.execute();
-            isTableCreatedBefore = true;
+            ConfigurationUtils.setConfig(ConfigurationConstants.TASKS_TABLES_CREATED, true);
         } catch (Exception e) {
             log.error("failed to create tasks table in the database", e);
             throw new DatabaseException("failed to create tasks table in the database", e);
@@ -77,27 +88,29 @@ public class DatabaseManager {
     }
 
     public void insert(DownloadTask downloadTask) {
-        log.info("inserting download task {} into the database", downloadTask.getNameProperty());
+        log.info("inserting download task {} into the database", downloadTask.getName());
         String sql = """
-                INSERT INTO TASKS(NAME, TYPE, STATUS, SIZE, SAVEPATH, URL, RESUMABLE, DATA) VALUES (? , ? , ? , ? , ? , ? , ? , ?);
+                INSERT INTO TASKS(NAME, TYPE, STATUS, SIZE, SAVEPATH, URL, RESUMABLE, DESCRIPTION, DATA) VALUES (? , ? , ? , ? , ? , ? , ? , ? , ?);
                 """;
 
         try (Connection connection = DriverManager.getConnection(DB_URL);
              PreparedStatement ps = connection.prepareStatement(sql)) {
 
-            ps.setString(1, downloadTask.getNameProperty().getValue());
+            ps.setString(1, downloadTask.getName());
             ps.setString(2, downloadTask.getType());
-            ps.setString(3, downloadTask.getStatusProperty().get().name());
-            ps.setLong(4, downloadTask.getSizeProperty().get());
+            ps.setString(3, downloadTask.getStatus().name());
+            ps.setLong(4, downloadTask.getSize());
             ps.setString(5, downloadTask.getSavePath());
             ps.setString(6, downloadTask.getDownloadUrl());
             ps.setBoolean(7, downloadTask.getResumable());
+            ps.setString(8, downloadTask.getDescription());
             String data = mapper.writeValueAsString(downloadTask.getSegments());
-            ps.setString(8, data);
+            ps.setString(9, data);
 
             int i = ps.executeUpdate();
-            log.info("{} record inserted for task {}", i, downloadTask.getNameProperty());
+            log.info("{} record inserted for task {}", i, downloadTask.getName());
 
+            tasksList.add(downloadTask);
         } catch (Exception e) {
             log.error("failed to insert download task {} in to the database", downloadTask, e);
             throw new DatabaseException("failed to insert a download task in to the database", e);
@@ -110,29 +123,40 @@ public class DatabaseManager {
         }
     }
 
-    public void update(DownloadTask downloadTask) {
-        log.info("updating task {} into the database", downloadTask.getNameProperty());
+    public void update(String pk, DownloadTask downloadTask) {
+        log.info("updating task {} into the database", downloadTask.getName());
         String sql = """
-                UPDATE TASKS SET NAME = ?, TYPE = ? , STATUS = ? , SIZE = ? , SAVEPATH = ? , URL = ? , RESUMABLE = ? , DATA = ? WHERE NAME = ?;
+                UPDATE TASKS SET NAME = ?, TYPE = ? , STATUS = ? , SIZE = ? , SAVEPATH = ? , URL = ? , RESUMABLE = ? , DATA = ? , DESCRIPTION = ? WHERE NAME = ?;
                 """;
 
         try (Connection connection = DriverManager.getConnection(DB_URL);
              PreparedStatement ps = connection.prepareStatement(sql)) {
 
-            ps.setString(1, downloadTask.getNameProperty().get());
+            ps.setString(1, downloadTask.getName());
             ps.setString(2, downloadTask.getType());
-            ps.setString(3, downloadTask.getStatusProperty().get().name());
-            ps.setLong(4, downloadTask.getSizeProperty().get());
+            ps.setString(3, downloadTask.getStatus().name());
+            ps.setLong(4, downloadTask.getSize());
             ps.setString(5, downloadTask.getSavePath());
             ps.setString(6, downloadTask.getDownloadUrl());
             ps.setBoolean(7, downloadTask.getResumable());
             String data = mapper.writeValueAsString(downloadTask.getSegments());
             ps.setString(8, data);
-            ps.setString(9, downloadTask.getNameProperty().get());
+            ps.setString(9, downloadTask.getDescription());
+            ps.setString(10, pk);
 
             int i = ps.executeUpdate();
-            log.info("{} record updated for task {}", i, downloadTask.getNameProperty());
 
+            int indexToUpdate = -1;
+            for (int idx = 0; idx < tasksList.size(); idx++) {
+                if (tasksList.get(idx).getName().equals(pk)) {
+                    indexToUpdate = idx;
+                    break;
+                }
+            }
+
+            tasksList.set(indexToUpdate, downloadTask);
+
+            log.info("{} record updated for task {}", i, downloadTask.getName());
         } catch (Exception e) {
             log.error("failed to insert task {} in to the database", downloadTask, e);
             throw new DatabaseException("failed to insert an task in to the database", e);
@@ -151,7 +175,7 @@ public class DatabaseManager {
             ps.setString(1, key);
             int i = ps.executeUpdate();
             log.info("{} record deleted from tasks, task {} was deleted", i, key);
-
+            tasksList.removeIf(d -> d.getName().equals(key));
         } catch (Exception e) {
             log.error("failed to delete task {} in to the database", key, e);
             throw new DatabaseException("failed to delete an task in to the database", e);
@@ -176,10 +200,8 @@ public class DatabaseManager {
         }
     }
 
-    public List<DownloadTask> getAllTasks() {
+    public void loadAllTasks() {
         log.info("getting all tasks from the database");
-        List<DownloadTask> result = new ArrayList<>();
-
         String sql = """
                 SELECT * FROM TASKS;
                 """;
@@ -189,35 +211,11 @@ public class DatabaseManager {
 
             ResultSet resultSet = ps.executeQuery();
             while (resultSet.next()) {
-                String name = resultSet.getString("NAME");
-                String type = resultSet.getString("TYPE");
-                String status = resultSet.getString("STATUS");
-                long size = resultSet.getLong("SIZE");
-                String savePath = resultSet.getString("SAVEPATH");
-                String url = resultSet.getString("URL");
-                int resumable = resultSet.getInt("RESUMABLE");
-
-                String data = resultSet.getString("DATA");
-                ConcurrentMap<Range, DataSegment> rangeDataSegmentConcurrentMap = mapper.readValue(data, new TypeReference<>() {
-                });
-
-                DownloadTask downloadTask = DownloadTask.builderWithSegment()
-                        .name(name)
-                        .type(type)
-                        .status(Status.valueOf(status))
-                        .size(size)
-                        .savePath(savePath)
-                        .downloadUrl(url)
-                        .resumable(resumable == 1)
-                        .segments(rangeDataSegmentConcurrentMap)
-                        .isPaused(true)
-                        .buildWithSegments();
-
-                result.add(downloadTask);
+                DownloadTask downloadTask = getDownloadTask(resultSet);
+                tasksList.add(downloadTask);
             }
 
-            log.info("finished getting all tasks from the database, number of records fetched: {}", result.size());
-            return result;
+            log.info("finished getting all tasks from the database, number of records fetched: {}", tasksList.size());
         } catch (Exception e) {
             log.error("failed to fetch all tasks from database", e);
             throw new DatabaseException("failed to fetch all tasks from database", e);
@@ -239,29 +237,7 @@ public class DatabaseManager {
 
             ResultSet resultSet = ps.executeQuery();
             while (resultSet.next()) {
-                String name = resultSet.getString("NAME");
-                String type = resultSet.getString("TYPE");
-                String status = resultSet.getString("STATUS");
-                long size = resultSet.getLong("SIZE");
-                String savePath = resultSet.getString("SAVEPATH");
-                String url = resultSet.getString("URL");
-                int resumable = resultSet.getInt("RESUMABLE");
-
-                String data = resultSet.getString("DATA");
-                ConcurrentMap<Range, DataSegment> rangeDataSegmentConcurrentMap = mapper.readValue(data, new TypeReference<>() {
-                });
-
-                result = DownloadTask.builderWithSegment()
-                        .name(name)
-                        .type(type)
-                        .status(Status.valueOf(status))
-                        .size(size)
-                        .savePath(savePath)
-                        .downloadUrl(url)
-                        .resumable(resumable == 1)
-                        .isPaused(true)
-                        .segments(rangeDataSegmentConcurrentMap)
-                        .buildWithSegments();
+                result = getDownloadTask(resultSet);
             }
 
             log.info("finished getting task with name {} from the database, record fetched: {}", key, result);
@@ -270,7 +246,36 @@ public class DatabaseManager {
             log.error("failed to fetch all tasks from database", e);
             throw new DatabaseException("failed to fetch all tasks from database", e);
         }
+    }
 
+    private DownloadTask getDownloadTask(ResultSet resultSet) throws SQLException, JsonProcessingException {
+        DownloadTask result;
+        String name = resultSet.getString("NAME");
+        String type = resultSet.getString("TYPE");
+        String status = resultSet.getString("STATUS");
+        long size = resultSet.getLong("SIZE");
+        String savePath = resultSet.getString("SAVEPATH");
+        String url = resultSet.getString("URL");
+        int resumable = resultSet.getInt("RESUMABLE");
+        String description = resultSet.getString("DESCRIPTION");
+
+        String data = resultSet.getString("DATA");
+        ConcurrentMap<Range, DataSegment> rangeDataSegmentConcurrentMap = mapper.readValue(data, new TypeReference<>() {
+        });
+
+        result = DownloadTask.builderWithSegment()
+                .name(name)
+                .type(type)
+                .status(Status.valueOf(status))
+                .size(size)
+                .savePath(savePath)
+                .downloadUrl(url)
+                .resumable(resumable == 1)
+                .isPaused(true)
+                .description(description)
+                .segments(rangeDataSegmentConcurrentMap)
+                .buildWithSegments();
+        return result;
     }
 
 }

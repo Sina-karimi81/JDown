@@ -52,10 +52,23 @@ public class ConfigurationUtils {
         return returnType.cast(configVal);
     }
 
-    public static class ConfigurationConstants {
+    public static void setConfig(String configName, Object newValue) {
+        if (CONFIGS == null) {
+            try {
+                populateConfigs(false);
+            } catch (IOException e) {
+                throw new RuntimeException("failed to load configuration into the application", e);
+            }
+        }
 
-        public static final String NUMBER_OF_THREADS = "numOfThreads";
-
+        try {
+            if (CONFIGS.containsKey(configName)) {
+                CONFIGS.put(configName, newValue);
+                MAPPER.writeValue(Path.of(CONFIG_PATH).toFile(), CONFIGS);
+            }
+        } catch (IOException e) {
+            throw new RuntimeException("failed to write the new value of " + configName + " to config file", e);
+        }
     }
 
 }

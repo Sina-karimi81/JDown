@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+  This FXML defines the layout for the "Download File Info" dialog.
+  - A BorderPane is the root, separating the main form from the bottom button bar.
+  - The 'center' region contains a GridPane to align all the labels and input controls.
+  - The 'bottom' region contains a ButtonBar for the main actions.
+-->
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.image.ImageView?>
+<?import javafx.scene.layout.*?>
+<BorderPane prefWidth="600.0" xmlns="http://javafx.com/javafx/17" xmlns:fx="http://javafx.com/fxml/1" fx:controller="com.github.sinakarimi.jdown.DownloadFileInfoController">
+    <center>
+        <GridPane hgap="10.0" vgap="15.0">
+            <columnConstraints>
+                <ColumnConstraints hgrow="NEVER" minWidth="80.0" />
+                <ColumnConstraints hgrow="ALWAYS" minWidth="10.0" />
+                <ColumnConstraints hgrow="NEVER" />
+                <ColumnConstraints hgrow="NEVER" />
+            </columnConstraints>
+            <rowConstraints>
+                <RowConstraints minHeight="10.0" vgrow="SOMETIMES" />
+                <RowConstraints minHeight="10.0" vgrow="SOMETIMES" />
+                <RowConstraints minHeight="10.0" prefHeight="80.0" vgrow="SOMETIMES" />
+            </rowConstraints>
+            <children>
+                <!-- Row 0: URL -->
+                <Label text="URL" GridPane.halignment="RIGHT" />
+                <TextField fx:id="urlTextField" editable="false" GridPane.columnIndex="1" GridPane.columnSpan="3" />
+
+                <!-- Row 1: Save As -->
+                <Label text="Save As" GridPane.halignment="RIGHT" GridPane.rowIndex="2" />
+                <TextField fx:id="saveAsTextField" maxWidth="1.7976931348623157E308" GridPane.columnIndex="1" GridPane.rowIndex="2" />
+                <Button mnemonicParsing="false" onAction="#handleBrowse" text="..." GridPane.columnIndex="2" GridPane.rowIndex="2" />
+
+                <!-- Row 2: Description -->
+                <Label text="Description" GridPane.halignment="RIGHT" GridPane.rowIndex="4" GridPane.valignment="TOP" />
+                <TextField fx:id="descriptionTextField"  GridPane.columnIndex="1" GridPane.columnSpan="3" GridPane.rowIndex="4" />
+            </children>
+            <padding>
+                <Insets bottom="20.0" left="10.0" right="20.0" top="20.0" />
+            </padding>
+        </GridPane>
+    </center>
+    <bottom>
+        <!-- ButtonBar provides a platform-consistent layout for action buttons -->
+        <ButtonBar prefHeight="40.0" BorderPane.alignment="CENTER">
+            <buttons>
+                <Button mnemonicParsing="false" onAction="#handleDownloadLater" text="Download Later" />
+                <Button defaultButton="true" mnemonicParsing="false" onAction="#handleStartDownload" text="Start Download" />
+                <Button fx:id="cancelButton" cancelButton="true" mnemonicParsing="false" onAction="#handleCancel" text="Cancel" />
+            </buttons>
+            <padding>
+                <Insets bottom="10.0" left="10.0" right="10.0" top="10.0" />
+            </padding>
+        </ButtonBar>
+    </bottom>
+</BorderPane>

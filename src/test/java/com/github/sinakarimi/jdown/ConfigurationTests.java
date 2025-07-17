@@ -1,5 +1,6 @@
 package com.github.sinakarimi.jdown;
 
+import com.github.sinakarimi.jdown.configuration.ConfigurationConstants;
 import com.github.sinakarimi.jdown.configuration.ConfigurationUtils;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -18,31 +19,31 @@ public class ConfigurationTests {
 
     @Test
     void WhenGetConfigAndConfigsNull_ThenPopulateConfigs() {
-        assertDoesNotThrow(() -> ConfigurationUtils.getConfig(ConfigurationUtils.ConfigurationConstants.NUMBER_OF_THREADS));
+        assertDoesNotThrow(() -> ConfigurationUtils.getConfig(ConfigurationConstants.NUMBER_OF_THREADS));
         assertTrue(ConfigurationUtils.hasConfigs());
     }
 
     @Test
     void getConfigs_WhenConfigKeyExists() {
-        Object config = ConfigurationUtils.getConfig(ConfigurationUtils.ConfigurationConstants.NUMBER_OF_THREADS);
+        Object config = ConfigurationUtils.getConfig(ConfigurationConstants.NUMBER_OF_THREADS);
         assertNotNull(config);
         assertInstanceOf(Integer.class, config);
     }
 
     @Test
     void getConfigs_WhenConfigKeyExistsAndTypeIsGiven() {
-        Integer numberOfThreads = ConfigurationUtils.getConfig(ConfigurationUtils.ConfigurationConstants.NUMBER_OF_THREADS, Integer.class);
+        Integer numberOfThreads = ConfigurationUtils.getConfig(ConfigurationConstants.NUMBER_OF_THREADS, Integer.class);
         assertNotNull(numberOfThreads);
     }
 
     @Test
     void getConfigs_WhenConfigKeyExistsAndTypeDoesNotMatch() {
-        assertThrows(ClassCastException.class, () -> ConfigurationUtils.getConfig(ConfigurationUtils.ConfigurationConstants.NUMBER_OF_THREADS, String.class));
+        assertThrows(ClassCastException.class, () -> ConfigurationUtils.getConfig(ConfigurationConstants.NUMBER_OF_THREADS, String.class));
     }
 
     @Test
     void getConfigs_WhenConfigKeyExistsAndTypeisNotGiven() {
-        assertThrows(IllegalArgumentException.class, () -> ConfigurationUtils.getConfig(ConfigurationUtils.ConfigurationConstants.NUMBER_OF_THREADS, null));
+        assertThrows(IllegalArgumentException.class, () -> ConfigurationUtils.getConfig(ConfigurationConstants.NUMBER_OF_THREADS, null));
     }
 
     @Test
