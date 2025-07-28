@@ -212,6 +212,7 @@ public class TasksDAO {
             ResultSet resultSet = ps.executeQuery();
             while (resultSet.next()) {
                 DownloadTask downloadTask = getDownloadTask(resultSet);
+                downloadTask.reloadSegments();
                 tasksList.add(downloadTask);
             }
 

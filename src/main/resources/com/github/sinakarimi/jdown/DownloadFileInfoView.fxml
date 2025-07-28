@@ -8,7 +8,6 @@
 -->
 <?import javafx.geometry.Insets?>
 <?import javafx.scene.control.*?>
-<?import javafx.scene.image.ImageView?>
 <?import javafx.scene.layout.*?>
 <BorderPane prefWidth="600.0" xmlns="http://javafx.com/javafx/17" xmlns:fx="http://javafx.com/fxml/1" fx:controller="com.github.sinakarimi.jdown.DownloadFileInfoController">
     <center>
@@ -20,6 +19,7 @@
                 <ColumnConstraints hgrow="NEVER" />
             </columnConstraints>
             <rowConstraints>
+                <RowConstraints minHeight="10.0" vgrow="SOMETIMES" />
                 <RowConstraints minHeight="10.0" vgrow="SOMETIMES" />
                 <RowConstraints minHeight="10.0" vgrow="SOMETIMES" />
                 <RowConstraints minHeight="10.0" prefHeight="80.0" vgrow="SOMETIMES" />
@@ -34,7 +34,11 @@
                 <TextField fx:id="saveAsTextField" maxWidth="1.7976931348623157E308" GridPane.columnIndex="1" GridPane.rowIndex="2" />
                 <Button mnemonicParsing="false" onAction="#handleBrowse" text="..." GridPane.columnIndex="2" GridPane.rowIndex="2" />
 
-                <!-- Row 2: Description -->
+                <!-- Row 2: File Name -->
+                <Label text="File Name" GridPane.halignment="RIGHT" GridPane.rowIndex="3" GridPane.valignment="TOP" />
+                <TextField fx:id="nameTextField"  GridPane.columnIndex="1" GridPane.columnSpan="3" GridPane.rowIndex="3" />
+
+                <!-- Row 3: Description -->
                 <Label text="Description" GridPane.halignment="RIGHT" GridPane.rowIndex="4" GridPane.valignment="TOP" />
                 <TextField fx:id="descriptionTextField"  GridPane.columnIndex="1" GridPane.columnSpan="3" GridPane.rowIndex="4" />
             </children>

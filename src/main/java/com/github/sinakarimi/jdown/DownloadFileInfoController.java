@@ -32,6 +32,7 @@ public class DownloadFileInfoController {
     @FXML private TextField saveAsTextField;
     @FXML private Button cancelButton;
     @FXML private TextField descriptionTextField;
+    @FXML private TextField nameTextField;
     private DownloadTaskManager downloadTaskManager;
     private DownloadTask downloadTask = null;
 
@@ -89,6 +90,10 @@ public class DownloadFileInfoController {
             downloadTask.setDescriptionProperty(descriptionTextField.getText());
         }
 
+        if (!nameTextField.getText().isEmpty()) {
+            downloadTask.setNameProperty(nameTextField.getText());
+        }
+
         downloadTaskManager.saveTask(downloadTask);
         closeDialog();
     }
@@ -101,6 +106,10 @@ public class DownloadFileInfoController {
 
         if (!descriptionTextField.getText().isEmpty()) {
             downloadTask.setDescriptionProperty(descriptionTextField.getText());
+        }
+
+        if (!nameTextField.getText().isEmpty()) {
+            downloadTask.setNameProperty(nameTextField.getText());
         }
 
         downloadTaskManager.saveTask(downloadTask);

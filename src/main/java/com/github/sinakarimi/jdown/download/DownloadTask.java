@@ -18,7 +18,9 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.io.BufferedOutputStream;
 import java.io.FileOutputStream;
+import java.io.IOException;
 import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
@@ -27,7 +29,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.*;
-import java.util.concurrent.locks.ReentrantReadWriteLock;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.locks.Condition;
+import java.util.concurrent.locks.ReentrantLock;
 
 import static com.github.sinakarimi.jdown.common.HttpConstants.GET_METHOD;
 import static com.github.sinakarimi.jdown.common.HttpConstants.RANGE;
@@ -69,7 +73,12 @@ public class DownloadTask {
 
     private CompletableFuture<Void> downloadTask;
 
-    private volatile boolean isPaused = true;
+    // A Lock implementation
+    private final ReentrantLock lock = new ReentrantLock();
+    // A condition object which we can use to put a thread to waiting state and the be able to wake it up
+    // using the await and signal methods
+    private final Condition isPausedCondition = lock.newCondition();
+    private final AtomicBoolean isPaused = new AtomicBoolean(true);
 
     public DownloadTask() {
         segments = new ConcurrentHashMap<>();
@@ -84,7 +93,7 @@ public class DownloadTask {
         this.savePath = savePath;
         this.downloadUrl = downloadUrl;
         this.resumable = resumable;
-        this.isPaused = isPaused;
+        this.isPaused.set(isPaused);
         this.descriptionProperty = new SimpleStringProperty(description);
         this.segments = new ConcurrentHashMap<>();
     }
@@ -99,7 +108,7 @@ public class DownloadTask {
         this.savePath = savePath;
         this.downloadUrl = downloadUrl;
         this.resumable = resumable;
-        this.isPaused = isPaused;
+        this.isPaused.set(isPaused);
         this.descriptionProperty = new SimpleStringProperty(description);
         this.segments = segments;
     }
@@ -129,11 +138,12 @@ public class DownloadTask {
     }
 
     /**
-     * a simple convenience method
+     * a simple convenience method, {@link SimpleStringProperty#getValueSafe()} returns an empty string if the underline
+     * value is null
      * @return description of downloadTask
      */
     public String getDescription() {
-        return descriptionProperty.get();
+        return descriptionProperty.getValueSafe();
     }
 
     public void setNameProperty(String name) {
@@ -186,27 +196,82 @@ public class DownloadTask {
             throw new DownloadNotResumableException(message);
         }
 
-        isPaused = true;
+        try { // these must happen in a try catch block otherwise they throw exception
+            lock.lock();
+            this.isPaused.set(true);
+        } finally {
+            lock.unlock();
+        }
         statusProperty.set(Status.PAUSED);
         log.info("set item {} to paused status, isPaused: {}", nameProperty.get(), isPaused);
     }
 
+    /**
+     * Used to resume a paused download, updates the isPaused field and calls the {@link Condition#signalAll()} to wake up
+     * all the sleeping threads
+     */
     public void resume() {
-        isPaused = false;
+        try { // these must happen in a try catch block otherwise they throw exception
+            lock.lock();
+            this.isPaused.set(false);
+            isPausedCondition.signalAll(); // wakes up all waiting threads
+        } finally {
+            lock.unlock();
+        }
+
         statusProperty.set(Status.IN_PROGRESS);
         log.info("set item {} to in progress status, isPaused: {}", nameProperty.get(), isPaused);
     }
 
     public boolean isPaused() {
-        return isPaused;
+        return isPaused.get();
     }
 
     public boolean isCancelled() {
         return downloadTask.isCancelled();
     }
 
+    /**
+     * to reload the unfinished segments, since after booting up again the CompletableFuture object does not have any tasks in it
+     * we pretty much to the same thing as {@link #start()}
+     */
+    public void reloadSegments() {
+        log.info("started to reload unfinished segments...");
+        List<Range> notCompletedSegments = segments.entrySet()
+                .stream()
+                .filter(e -> !e.getValue().isComplete())
+                .map(Map.Entry::getKey)
+                .toList();
+
+        isPaused.set(true);
+
+        List<CompletableFuture<Void>> requests = new ArrayList<>();
+        for (Range notCompletedSegment : notCompletedSegments) {
+            CompletableFuture<Void> voidCompletableFuture = CompletableFuture.runAsync(() -> reloadHttpRequests(notCompletedSegment));
+            requests.add(voidCompletableFuture);
+        }
+
+        downloadTask = composeRequests(requests);
+        log.info("finished reloading unfinished segments");
+    }
+
+    private void reloadHttpRequests(Range range) {
+        try {
+            String rangeValues = createRangeHeader(range);
+
+            checkIsPausedCondition();
+
+            HttpResponse<byte[]> send = sendHttpRequest(rangeValues);
+            saveToArray(range, send);
+        } catch (Exception e) {
+            log.error("failed create a request for the given item with name {}!!!", nameProperty.get(), e);
+            statusProperty.set(Status.ERROR);
+            throw new DownloadFailedException("Failed to download the requested file: " + nameProperty.get(), e);
+        }
+    }
+
     public void start() throws DownloadFailedException {
-        List<CompletableFuture<Void>> requests= new ArrayList<>();
+        List<CompletableFuture<Void>> requests = new ArrayList<>();
 
         log.info("started to create a request for the {}", nameProperty.get());
         List<Range> ranges = createRanges(sizeProperty.get());
@@ -216,16 +281,7 @@ public class DownloadTask {
             requests.add(downloadPartition);
         }
 
-        downloadTask = CompletableFuture.allOf(requests.toArray(CompletableFuture[]::new))
-                .thenAccept(r -> saveToFile())
-                .exceptionally(ex -> {
-                    if (ex != null) {
-                        log.error("one of the requests failed to complete!!!", ex);
-                        throw new DownloadFailedException(ex);
-                    }
-
-                    return null;
-                });
+        downloadTask = composeRequests(requests);
 
         statusProperty.set(Status.IN_PROGRESS);
         log.info("Finished creating request for {}", nameProperty.get());
@@ -234,30 +290,14 @@ public class DownloadTask {
     private CompletableFuture<Void> createDataSegments(Range range) {
         return CompletableFuture.runAsync(() -> {
             try {
-
-                String rangeValues;
-                if (range.getTo() >= sizeProperty.get()) {
-                    rangeValues = String.format("bytes=%d-", range.getFrom());
-                } else {
-                    rangeValues = String.format("bytes=%d-%d", range.getFrom(), range.getTo());
-                }
+                String rangeHeader = createRangeHeader(range);
 
                 int size = range.getTo() - range.getFrom() + 1;
                 segments.put(range, new DataSegment(size));
 
-                while (isPaused) {
-                    log.info("inside the pause loop for item {}, isPaused: {} Thread: {}", nameProperty.get(), isPaused, Thread.currentThread().getName());
-                    Thread.onSpinWait(); // just used for performance by the JVM, no additional functionality
-                }
+                checkIsPausedCondition();
 
-                HttpClient client = HttpClient.newHttpClient();
-                HttpRequest request = HttpRequest
-                        .newBuilder(new URI(downloadUrl))
-                        .method(GET_METHOD.getValue(), HttpRequest.BodyPublishers.noBody())
-                        .header(RANGE.getValue(), rangeValues)
-                        .build();
-
-                HttpResponse<byte[]> send = client.send(request, HttpResponse.BodyHandlers.ofByteArray());
+                HttpResponse<byte[]> send = sendHttpRequest(rangeHeader);
                 saveToArray(range, send);
             } catch (Exception e) {
                 log.error("failed create a request for the given item with name {}!!!", nameProperty.get(), e);
@@ -283,6 +323,57 @@ public class DownloadTask {
         }
 
         return ranges;
+    }
+
+    private String createRangeHeader(Range range) {
+        String rangeValues;
+        if (range.getTo() >= sizeProperty.get()) {
+            rangeValues = String.format("bytes=%d-", range.getFrom());
+        } else {
+            rangeValues = String.format("bytes=%d-%d", range.getFrom(), range.getTo());
+        }
+        return rangeValues;
+    }
+
+    private HttpResponse<byte[]> sendHttpRequest(String rangeHeader) throws URISyntaxException, IOException, InterruptedException {
+        HttpClient client = HttpClient.newHttpClient();
+        HttpRequest request = HttpRequest
+                .newBuilder(new URI(downloadUrl))
+                .method(GET_METHOD.getValue(), HttpRequest.BodyPublishers.noBody())
+                .header(RANGE.getValue(), rangeHeader)
+                .build();
+
+        return client.send(request, HttpResponse.BodyHandlers.ofByteArray());
+    }
+
+    private CompletableFuture<Void> composeRequests(List<CompletableFuture<Void>> requests) {
+        return CompletableFuture.allOf(requests.toArray(CompletableFuture[]::new))
+                .thenAccept(r -> saveToFile())
+                .exceptionally(ex -> {
+                    if (ex != null) {
+                        log.error("one of the requests failed to complete!!!", ex);
+                        throw new DownloadFailedException(ex);
+                    }
+
+                    return null;
+                });
+    }
+
+    /**
+     * A method to check whether a download is paused or not. will put the thread in waiting mode using {@link Condition#await()}
+     * until it is waked up using a {@link Condition#signalAll()} method when a download is resumed in {@link #resume()}
+     * @throws InterruptedException if the threads are interrupted, for example during a thread shutdown
+     */
+    private void checkIsPausedCondition() throws InterruptedException {
+        try {
+            lock.lock();
+            while(isPaused.get()) {
+                log.info("inside the pause loop for item {}, isPaused: {} Thread: {}", nameProperty.get(), isPaused, Thread.currentThread().getName());
+                isPausedCondition.await();
+            }
+        } finally {
+            lock.unlock();
+        }
     }
 
     private void saveToArray(Range range, HttpResponse<byte[]> response) {
