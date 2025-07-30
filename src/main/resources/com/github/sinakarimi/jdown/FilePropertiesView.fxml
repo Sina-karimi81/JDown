@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.Separator?>
+<?import javafx.scene.control.TextArea?>
+<?import javafx.scene.control.TextField?>
+<?import javafx.scene.layout.BorderPane?>
+<?import javafx.scene.layout.ColumnConstraints?>
+<?import javafx.scene.layout.GridPane?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.RowConstraints?>
+<?import javafx.scene.layout.VBox?>
+<?import javafx.scene.text.Font?>
+
+<!--
+  This FXML defines the layout for the "File Properties" dialog.
+  - A BorderPane is the root layout.
+  - The 'top' region displays the file name.
+  - The 'center' region uses a GridPane to neatly display all the file properties.
+-->
+<BorderPane prefWidth="650.0" xmlns="http://javafx.com/javafx/17" xmlns:fx="http://javafx.com/fxml/1" fx:controller="com.github.sinakarimi.jdown.FilePropertiesController">
+    <top>
+        <VBox>
+            <HBox alignment="CENTER_LEFT" spacing="15.0">
+                <padding>
+                    <Insets bottom="10.0" left="15.0" right="15.0" top="15.0"/>
+                </padding>
+                <Label fx:id="fileNameLabel">
+                    <font>
+                        <Font name="System Bold" size="14.0"/>
+                    </font>
+                </Label>
+            </HBox>
+            <Separator prefWidth="200.0"/>
+        </VBox>
+    </top>
+    <center>
+        <GridPane hgap="10.0" vgap="12.0" BorderPane.alignment="CENTER">
+            <columnConstraints>
+                <ColumnConstraints hgrow="NEVER" minWidth="80.0"/>
+                <ColumnConstraints hgrow="ALWAYS" minWidth="10.0"/>
+            </columnConstraints>
+            <rowConstraints>
+                <RowConstraints minHeight="10.0" vgrow="SOMETIMES"/>
+                <RowConstraints minHeight="10.0" vgrow="SOMETIMES"/>
+                <RowConstraints minHeight="10.0" vgrow="SOMETIMES"/>
+                <RowConstraints minHeight="10.0" vgrow="SOMETIMES"/>
+                <RowConstraints minHeight="10.0" vgrow="SOMETIMES"/>
+                <RowConstraints minHeight="10.0" vgrow="SOMETIMES"/>
+            </rowConstraints>
+            <padding>
+                <Insets bottom="20.0" left="15.0" right="15.0" top="20.0"/>
+            </padding>
+            <Label text="Type:" GridPane.halignment="RIGHT"/>
+            <Label fx:id="typeValueLabel" GridPane.columnIndex="1"/>
+
+            <Label text="Status:" GridPane.halignment="RIGHT" GridPane.rowIndex="1"/>
+            <Label fx:id="statusValueLabel" GridPane.columnIndex="1" GridPane.rowIndex="1"/>
+
+            <Label text="Size:" GridPane.halignment="RIGHT" GridPane.rowIndex="2"/>
+            <Label fx:id="sizeValueLabel" GridPane.columnIndex="1" GridPane.rowIndex="2"/>
+
+            <Label text="Save To:" GridPane.halignment="RIGHT" GridPane.rowIndex="3"/>
+            <TextField fx:id="saveToTextField" editable="false" GridPane.columnIndex="1" GridPane.rowIndex="3"/>
+
+            <Label text="Address:" GridPane.halignment="RIGHT" GridPane.rowIndex="4"/>
+            <TextField fx:id="addressTextField" editable="false" GridPane.columnIndex="1" GridPane.rowIndex="4"/>
+
+            <Label text="Description:" GridPane.halignment="RIGHT" GridPane.rowIndex="5" GridPane.valignment="TOP"/>
+            <TextField fx:id="descriptionTextField" editable="false" GridPane.columnIndex="1" GridPane.rowIndex="5"/>
+        </GridPane>
+    </center>
+</BorderPane>

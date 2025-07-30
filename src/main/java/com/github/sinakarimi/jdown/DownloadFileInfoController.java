@@ -82,26 +82,18 @@ public class DownloadFileInfoController {
 
     @FXML
     private void handleDownloadLater(ActionEvent event) {
-        // TODO: Logic to create the DownloadTask but with a PENDING or PAUSED status.
         System.out.println("Download Later button clicked.");
-        downloadTask.setSavePath(saveAsTextField.getText());
-
-        if (!descriptionTextField.getText().isEmpty()) {
-            downloadTask.setDescriptionProperty(descriptionTextField.getText());
-        }
-
-        if (!nameTextField.getText().isEmpty()) {
-            downloadTask.setNameProperty(nameTextField.getText());
-        }
-
-        downloadTaskManager.saveTask(downloadTask);
-        closeDialog();
+        saveTask();
     }
 
     @FXML
     private void handleStartDownload(ActionEvent event) {
-        // TODO: Logic to create the DownloadTask and start it immediately.
         System.out.println("Start Download button clicked.");
+        saveTask();
+        downloadTask.start();
+    }
+
+    private void saveTask() {
         downloadTask.setSavePath(saveAsTextField.getText());
 
         if (!descriptionTextField.getText().isEmpty()) {
@@ -112,9 +104,8 @@ public class DownloadFileInfoController {
             downloadTask.setNameProperty(nameTextField.getText());
         }
 
-        downloadTaskManager.saveTask(downloadTask);
         closeDialog();
-        downloadTask.start();
+        downloadTaskManager.saveTask(downloadTask);
     }
 
     @FXML

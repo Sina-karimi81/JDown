@@ -57,11 +57,6 @@ public class TasksDAO {
     }
 
     private void createTable() {
-        Boolean isTableCreatedBefore = ConfigurationUtils.getConfig(ConfigurationConstants.TASKS_TABLES_CREATED, Boolean.class);
-        if (isTableCreatedBefore) {
-            return;
-        }
-
         String sql = """
                 CREATE TABLE IF NOT EXISTS TASKS (
                     NAME TEXT PRIMARY KEY,
@@ -80,7 +75,6 @@ public class TasksDAO {
              PreparedStatement ps = connection.prepareStatement(sql)) {
 
             ps.execute();
-            ConfigurationUtils.setConfig(ConfigurationConstants.TASKS_TABLES_CREATED, true);
         } catch (Exception e) {
             log.error("failed to create tasks table in the database", e);
             throw new DatabaseException("failed to create tasks table in the database", e);

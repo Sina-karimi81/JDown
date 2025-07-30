@@ -1,5 +1,6 @@
 package com.github.sinakarimi.jdown;
 
+import com.github.sinakarimi.jdown.common.FileSizeUtil;
 import com.github.sinakarimi.jdown.common.HttpConstants;
 import com.github.sinakarimi.jdown.dataObjects.Status;
 import com.github.sinakarimi.jdown.database.TasksDAO;
@@ -141,6 +142,18 @@ public class DownloadTaskManagerTests {
                 HttpConstants.CONTENT_TYPE_HEADER.getValue(), type,
                 HttpConstants.CONTENT_DISPOSITION_HEADER.getValue(), disposition
         );
+    }
+
+    @Test
+    public void calculateSize() {
+        String mb = FileSizeUtil.calculateSize(75800158L);
+        assertEquals("72.29 MB (75800158 Bytes)", mb);
+        String kb = FileSizeUtil.calculateSize(75800L);
+        assertEquals("74.02 KB (75800 Bytes)", kb);
+        String gb = FileSizeUtil.calculateSize(75800158000L);
+        assertEquals("70.59 GB (75800158000 Bytes)", gb);
+        String b = FileSizeUtil.calculateSize(500L);
+        assertEquals("500 B (500 Bytes)", b);
     }
 
 }

@@ -92,7 +92,7 @@ public class DownloadTaskManager {
             HttpClient client = HttpClient.newHttpClient();
 
             HttpRequest request = HttpRequest
-                    .newBuilder(new URI(fileUrl))
+                    .newBuilder(URI.create(fileUrl))
                     .method(HEAD_METHOD.getValue(), HttpRequest.BodyPublishers.noBody())
                     .build();
 
@@ -107,6 +107,10 @@ public class DownloadTaskManager {
     public ObservableList<DownloadTask> listAllDownloadTasks() {
         dbManger.loadAllTasks();
         return dbManger.getTasksList();
+    }
+
+    public void deleteTask(DownloadTask task) {
+        dbManger.delete(task.getName());
     }
 
 }

@@ -5,10 +5,15 @@ import com.github.sinakarimi.jdown.download.DownloadTask;
 import com.github.sinakarimi.jdown.download.DownloadTaskManager;
 import javafx.collections.ObservableList;
 import javafx.event.ActionEvent;
+import javafx.event.Event;
+import javafx.event.EventHandler;
+import javafx.event.EventType;
 import javafx.fxml.FXML;
 import javafx.fxml.FXMLLoader;
 import javafx.scene.Parent;
 import javafx.scene.Scene;
+import javafx.scene.control.ContextMenu;
+import javafx.scene.control.MenuItem;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableView;
 import javafx.scene.control.cell.ProgressBarTableCell;
@@ -16,6 +21,7 @@ import javafx.stage.Modality;
 import javafx.stage.Stage;
 import lombok.extern.slf4j.Slf4j;
 
+import java.awt.event.MouseEvent;
 import java.io.IOException;
 
 @Slf4j
@@ -58,8 +64,54 @@ public class DownloadManagerController {
 
         downloadTaskManager = ClassManager.getDownloadTaskManager();
 
+        // creates the menu that you see when you right-click on a rwo
+        ContextMenu contextMenu = new ContextMenu();
+
+        // items in the context menu
+        MenuItem delete = new MenuItem("delete");
+        delete.setOnAction(event -> {
+            DownloadTask selectedItem = downloadsTable.getSelectionModel().getSelectedItem();
+            downloadsTable.getItems().remove(selectedItem);
+            downloadTaskManager.deleteTask(selectedItem);
+        });
+
+        MenuItem properties = new MenuItem("properties");
+        properties.setOnAction(event -> {
+            DownloadTask selectedItem = downloadsTable.getSelectionModel().getSelectedItem();
+            handlePropertiesContextAction(selectedItem);
+        });
+
+        // adding items to context menu
+        contextMenu.getItems().addAll(delete, properties);
+
+        downloadsTable.setContextMenu(contextMenu);
+
         ObservableList<DownloadTask> downloadTasks = downloadTaskManager.listAllDownloadTasks();
         downloadsTable.setItems(downloadTasks);
+    }
+
+    private void handlePropertiesContextAction(DownloadTask task) {
+        log.info("properties called on {}", task.getName());
+        FXMLLoader fxmlLoader = new FXMLLoader(getClass().getResource("FilePropertiesView.fxml"));
+        Parent root = null;
+
+        try {
+            // you always have to call #load() first, then you can access fxml elements, otherwise NullPointers!!!
+            root = fxmlLoader.load();
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+
+        FilePropertiesController filePropertiesController = fxmlLoader.getController();
+        filePropertiesController.initValues(task);
+
+        Stage viewFileProperties = new Stage();
+        // stops the user from interacting with any other window other than the one currently visible
+        viewFileProperties.initModality(Modality.APPLICATION_MODAL);
+        viewFileProperties.setResizable(false);
+        viewFileProperties.setTitle("File Properties");
+        viewFileProperties.setScene(new Scene(root));
+        viewFileProperties.show();
     }
 
     /**
