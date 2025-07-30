@@ -96,11 +96,11 @@ public class DownloadFileInfoController {
     private void saveTask() {
         downloadTask.setSavePath(saveAsTextField.getText());
 
-        if (!descriptionTextField.getText().isEmpty()) {
+        if (descriptionTextField.getText() != null && !descriptionTextField.getText().isEmpty()) {
             downloadTask.setDescriptionProperty(descriptionTextField.getText());
         }
 
-        if (!nameTextField.getText().isEmpty()) {
+        if (nameTextField.getText() != null && !nameTextField.getText().isEmpty()) {
             downloadTask.setNameProperty(nameTextField.getText());
         }
 

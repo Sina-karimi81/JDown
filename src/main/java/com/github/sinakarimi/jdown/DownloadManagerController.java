@@ -59,7 +59,7 @@ public class DownloadManagerController {
         statusColumn.setCellValueFactory(cellData -> cellData.getValue().getStatusProperty());
 
         // For the progress column, we want to display a progress bar.
-//        progressColumn.setCellValueFactory(cellData -> cellData.getValue().getProgressProperty().asObject());
+        progressColumn.setCellValueFactory(cellData -> cellData.getValue().getProgressProperty().asObject());
         progressColumn.setCellFactory(ProgressBarTableCell.forTableColumn());
 
         downloadTaskManager = ClassManager.getDownloadTaskManager();

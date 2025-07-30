@@ -67,6 +67,7 @@ public class TasksDAO {
                     URL TEXT,
                     RESUMABLE INTEGER,
                     DESCRIPTION TEXT,
+                    PROGRESSION REAL,
                     DATA TEXT
                 );
                 """;
@@ -84,7 +85,7 @@ public class TasksDAO {
     public void insert(DownloadTask downloadTask) {
         log.info("inserting download task {} into the database", downloadTask.getName());
         String sql = """
-                INSERT INTO TASKS(NAME, TYPE, STATUS, SIZE, SAVEPATH, URL, RESUMABLE, DESCRIPTION, DATA) VALUES (? , ? , ? , ? , ? , ? , ? , ? , ?);
+                INSERT INTO TASKS(NAME, TYPE, STATUS, SIZE, SAVEPATH, URL, RESUMABLE, PROGRESSION, DESCRIPTION, DATA) VALUES (? , ? , ? , ? , ? , ? , ? , ? , ? , ?);
                 """;
 
         try (Connection connection = DriverManager.getConnection(DB_URL);
@@ -97,9 +98,10 @@ public class TasksDAO {
             ps.setString(5, downloadTask.getSavePath());
             ps.setString(6, downloadTask.getDownloadUrl());
             ps.setBoolean(7, downloadTask.getResumable());
-            ps.setString(8, downloadTask.getDescription());
+            ps.setDouble(8, downloadTask.getProgress());
+            ps.setString(9, downloadTask.getDescription());
             String data = mapper.writeValueAsString(downloadTask.getSegments());
-            ps.setString(9, data);
+            ps.setString(10, data);
 
             int i = ps.executeUpdate();
             log.info("{} record inserted for task {}", i, downloadTask.getName());
@@ -120,7 +122,7 @@ public class TasksDAO {
     public void update(String pk, DownloadTask downloadTask) {
         log.info("updating task {} into the database", downloadTask.getName());
         String sql = """
-                UPDATE TASKS SET NAME = ?, TYPE = ? , STATUS = ? , SIZE = ? , SAVEPATH = ? , URL = ? , RESUMABLE = ? , DATA = ? , DESCRIPTION = ? WHERE NAME = ?;
+                UPDATE TASKS SET NAME = ?, TYPE = ? , STATUS = ? , SIZE = ? , SAVEPATH = ? , URL = ? , RESUMABLE = ? , DATA = ? , DESCRIPTION = ? , PROGRESSION = ? WHERE NAME = ?;
                 """;
 
         try (Connection connection = DriverManager.getConnection(DB_URL);
@@ -136,7 +138,8 @@ public class TasksDAO {
             String data = mapper.writeValueAsString(downloadTask.getSegments());
             ps.setString(8, data);
             ps.setString(9, downloadTask.getDescription());
-            ps.setString(10, pk);
+            ps.setDouble(10, downloadTask.getProgress());
+            ps.setString(11, pk);
 
             int i = ps.executeUpdate();
 
@@ -253,6 +256,7 @@ public class TasksDAO {
         String url = resultSet.getString("URL");
         int resumable = resultSet.getInt("RESUMABLE");
         String description = resultSet.getString("DESCRIPTION");
+        double progress = resultSet.getDouble("PROGRESSION");
 
         String data = resultSet.getString("DATA");
         ConcurrentMap<Range, DataSegment> rangeDataSegmentConcurrentMap = mapper.readValue(data, new TypeReference<>() {
@@ -268,6 +272,7 @@ public class TasksDAO {
                 .resumable(resumable == 1)
                 .isPaused(true)
                 .description(description)
+                .progress(progress)
                 .segments(rangeDataSegmentConcurrentMap)
                 .buildWithSegments();
         return result;

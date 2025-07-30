@@ -66,11 +66,11 @@ public class DownloadTask {
     @Setter
     private Boolean resumable;
     @Getter
-    @Setter
     private SimpleDoubleProperty progressProperty;
     @Getter
     private SimpleStringProperty descriptionProperty;
 
+    private long completedSegmentSize = 0;
     private CompletableFuture<Void> downloadTask;
 
     // A Lock implementation
@@ -82,10 +82,12 @@ public class DownloadTask {
 
     public DownloadTask() {
         segments = new ConcurrentHashMap<>();
+        progressProperty = new SimpleDoubleProperty(0);
+        this.descriptionProperty = new SimpleStringProperty();
     }
 
     @Builder
-    public DownloadTask(String name, String type, Status status, Long size, String savePath, String downloadUrl, Boolean resumable, String description, boolean isPaused) {
+    public DownloadTask(String name, String type, Status status, Long size, String savePath, String downloadUrl, Boolean resumable, double progress, String description, boolean isPaused) {
         this.nameProperty = new SimpleStringProperty(name);
         this.type = type;
         this.statusProperty = new SimpleObjectProperty<>(status);
@@ -94,13 +96,15 @@ public class DownloadTask {
         this.downloadUrl = downloadUrl;
         this.resumable = resumable;
         this.isPaused.set(isPaused);
+        this.progressProperty = new SimpleDoubleProperty(progress);
         this.descriptionProperty = new SimpleStringProperty(description);
+        completedSegmentSize = (long) ((progress / 100) * sizeProperty.get());
         this.segments = new ConcurrentHashMap<>();
     }
 
     // if a different wasn't used, lombok wouldn't recognize the new field
     @Builder(builderMethodName = "builderWithSegment", buildMethodName = "buildWithSegments")
-    public DownloadTask(String name, String type, Status status, Long size, String savePath, String downloadUrl, Boolean resumable, String description, boolean isPaused, ConcurrentMap<Range, DataSegment> segments) {
+    public DownloadTask(String name, String type, Status status, Long size, String savePath, String downloadUrl, Boolean resumable, double progress, String description, boolean isPaused, ConcurrentMap<Range, DataSegment> segments) {
         this.nameProperty = new SimpleStringProperty(name);
         this.type = type;
         this.statusProperty = new SimpleObjectProperty<>(status);
@@ -109,6 +113,8 @@ public class DownloadTask {
         this.downloadUrl = downloadUrl;
         this.resumable = resumable;
         this.isPaused.set(isPaused);
+        this.progressProperty = new SimpleDoubleProperty(progress);
+        completedSegmentSize = (long) ((progress / 100) * sizeProperty.get());
         this.descriptionProperty = new SimpleStringProperty(description);
         this.segments = segments;
     }
@@ -146,6 +152,14 @@ public class DownloadTask {
         return descriptionProperty.getValueSafe();
     }
 
+    /**
+     * a simple convenience method
+     * @return progress percentage of downloadTask
+     */
+    public double getProgress() {
+        return progressProperty.get();
+    }
+
     public void setNameProperty(String name) {
         if (nameProperty == null) {
             nameProperty = new SimpleStringProperty(name);
@@ -168,6 +182,16 @@ public class DownloadTask {
         } else {
             sizeProperty.set(size);
         }
+    }
+
+    public void setProgressProperty(double progress) {
+        if (progressProperty == null) {
+            progressProperty = new SimpleDoubleProperty(progress);
+        } else {
+            progressProperty.set(progress);
+        }
+
+        completedSegmentSize = (long) ((progress / 100) * sizeProperty.get());
     }
 
     public void setDescriptionProperty(String description) {
@@ -388,6 +412,7 @@ public class DownloadTask {
         dataSegment.setSegment(body);
         dataSegment.setComplete(true);
         segments.put(range, dataSegment);
+        updateProgress(body.length);
         log.info("finished saving request range {} ", range.rangeString());
     }
 
@@ -428,6 +453,12 @@ public class DownloadTask {
         }
 
         return buffer.array();
+    }
+
+    private void updateProgress(int segmentSize) {
+        completedSegmentSize += segmentSize;
+        double completedPercentage = ((double) completedSegmentSize / sizeProperty.get()) * 100;
+        progressProperty.set(completedPercentage);
     }
 
     public void waitForDuration(int duration) throws ExecutionException, InterruptedException, TimeoutException {
