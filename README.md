@@ -1,6 +1,6 @@
 # Disclaimer
 
-Some aspect of the project might not work since the UI is not implemented yet and will be added to the project later in the future, right now this project only contains the backend logic!!!!
+Some aspect of the project might not work since the UI is not implemented yet and will be added to the project later in the future!!!!
 
 # JDown
 
@@ -101,15 +101,10 @@ If you encounter any issues or bugs, please report them on the [Issues](https://
 
 ## 🎯 Roadmap
 
-- [ ] Add UI panel
+- [x] Add UI panel
 - [ ] Support for download scheduling
 - [ ] Support for Batch Downloads
-- [ ] Integration with cloud storage services
-- [ ] Torrent download support
 - [ ] FTP download support
-- [ ] Chrome/Firefox extension
-- [ ] Themes and customization options
-- [ ] Command-line interface
 
 ## 🙏 Acknowledgments
 
