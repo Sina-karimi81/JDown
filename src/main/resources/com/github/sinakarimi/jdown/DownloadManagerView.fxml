@@ -32,12 +32,12 @@
                     <FontIcon iconLiteral="fas-plus"/>
                 </graphic>
             </Button>
-            <Button mnemonicParsing="false" onAction="#handleResumeAction" text="Resume">
+            <Button fx:id="resumeButton" mnemonicParsing="false" onAction="#handleResumeAction" text="Resume">
                 <graphic>
                     <FontIcon iconLiteral="fas-play"/>
                 </graphic>
             </Button>
-            <Button mnemonicParsing="false" onAction="#handlePauseAction" text="Pause">
+            <Button fx:id="pauseButton" mnemonicParsing="false" onAction="#handlePauseAction" text="Pause">
                 <graphic>
                     <FontIcon iconLiteral="fas-pause"/>
                 </graphic>
@@ -47,7 +47,7 @@
                     <FontIcon iconLiteral="fas-pause"/>
                 </graphic>
             </Button>
-            <Button mnemonicParsing="false" onAction="#handleCancelAction" text="Cancel">
+            <Button fx:id="cancelButton" mnemonicParsing="false" onAction="#handleCancelAction" text="Cancel">
                 <graphic>
                     <FontIcon iconLiteral="fas-times"/>
                 </graphic>

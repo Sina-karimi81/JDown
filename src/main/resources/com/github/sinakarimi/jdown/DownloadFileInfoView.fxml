@@ -17,43 +17,45 @@
 <?import javafx.scene.layout.GridPane?>
 <?import javafx.scene.layout.RowConstraints?>
 
-<BorderPane prefWidth="600.0" xmlns="http://javafx.com/javafx/24.0.1" xmlns:fx="http://javafx.com/fxml/1" fx:controller="com.github.sinakarimi.jdown.DownloadFileInfoController">
+<BorderPane prefWidth="600.0" xmlns="http://javafx.com/javafx/17" xmlns:fx="http://javafx.com/fxml/1" fx:controller="com.github.sinakarimi.jdown.DownloadFileInfoController">
     <center>
         <GridPane hgap="10.0" vgap="15.0">
             <columnConstraints>
-                <ColumnConstraints hgrow="NEVER" minWidth="80.0" />
-                <ColumnConstraints hgrow="ALWAYS" minWidth="10.0" />
-                <ColumnConstraints hgrow="NEVER" />
-                <ColumnConstraints hgrow="NEVER" />
+                <ColumnConstraints hgrow="NEVER" minWidth="80.0"/>
+                <ColumnConstraints hgrow="ALWAYS" minWidth="10.0"/>
+                <ColumnConstraints hgrow="NEVER"/>
+                <ColumnConstraints hgrow="NEVER"/>
             </columnConstraints>
             <rowConstraints>
-                <RowConstraints minHeight="10.0" vgrow="SOMETIMES" />
-                <RowConstraints minHeight="10.0" vgrow="SOMETIMES" />
-                <RowConstraints minHeight="10.0" vgrow="SOMETIMES" />
-                <RowConstraints minHeight="10.0" prefHeight="80.0" vgrow="SOMETIMES" />
-            <RowConstraints />
+                <RowConstraints minHeight="10.0" vgrow="SOMETIMES"/>
+                <RowConstraints minHeight="10.0" vgrow="SOMETIMES"/>
+                <RowConstraints minHeight="10.0" vgrow="SOMETIMES"/>
+                <RowConstraints minHeight="10.0" prefHeight="80.0" vgrow="SOMETIMES"/>
+                <RowConstraints/>
             </rowConstraints>
-            <children>
-                <!-- Row 0: URL -->
-                <Label text="URL" GridPane.halignment="RIGHT" />
-                <TextField fx:id="urlTextField" editable="false" GridPane.columnIndex="1" GridPane.columnSpan="3" />
-
-                <!-- Row 1: Save As -->
-                <Label text="Save As" GridPane.halignment="RIGHT" GridPane.rowIndex="2" />
-                <TextField fx:id="saveAsTextField" maxWidth="1.7976931348623157E308" GridPane.columnIndex="1" GridPane.rowIndex="2" />
-                <Button mnemonicParsing="false" onAction="#handleBrowse" text="..." GridPane.columnIndex="2" GridPane.rowIndex="2" />
-
-                <!-- Row 2: File Name -->
-                <Label prefWidth="53.0" text="File Name" GridPane.halignment="RIGHT" GridPane.rowIndex="3" GridPane.valignment="CENTER" />
-                <TextField fx:id="nameTextField" GridPane.columnIndex="1" GridPane.columnSpan="3" GridPane.rowIndex="3" />
-
-                <!-- Row 3: Description -->
-                <Label text="Description" GridPane.halignment="RIGHT" GridPane.rowIndex="4" GridPane.valignment="TOP" />
-                <TextField fx:id="descriptionTextField" GridPane.columnIndex="1" GridPane.columnSpan="3" GridPane.rowIndex="4" />
-            </children>
             <padding>
-                <Insets bottom="20.0" left="10.0" right="20.0" top="20.0" />
+                <Insets bottom="20.0" left="10.0" right="20.0" top="20.0"/>
             </padding>
+            <!-- Row 0: URL -->
+            <Label text="URL" GridPane.halignment="RIGHT"/>
+            <TextField fx:id="urlTextField" editable="false" GridPane.columnIndex="1" GridPane.columnSpan="3"/>
+
+            <!-- Row 1: Save As -->
+            <Label text="Save As" GridPane.halignment="RIGHT" GridPane.rowIndex="2"/>
+            <TextField fx:id="saveAsTextField" maxWidth="1.7976931348623157E308" GridPane.columnIndex="1"
+                       GridPane.rowIndex="2"/>
+            <Button mnemonicParsing="false" onAction="#handleBrowse" text="..." GridPane.columnIndex="2"
+                    GridPane.rowIndex="2"/>
+
+            <!-- Row 2: File Name -->
+            <Label prefWidth="53.0" text="File Name" GridPane.halignment="RIGHT" GridPane.rowIndex="3"
+                   GridPane.valignment="CENTER"/>
+            <TextField fx:id="nameTextField" GridPane.columnIndex="1" GridPane.columnSpan="3" GridPane.rowIndex="3"/>
+
+            <!-- Row 3: Description -->
+            <Label text="Description" GridPane.halignment="RIGHT" GridPane.rowIndex="4" GridPane.valignment="TOP"/>
+            <TextField fx:id="descriptionTextField" GridPane.columnIndex="1" GridPane.columnSpan="3"
+                       GridPane.rowIndex="4"/>
         </GridPane>
     </center>
     <bottom>

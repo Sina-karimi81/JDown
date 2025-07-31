@@ -84,12 +84,14 @@ public class DownloadFileInfoController {
     private void handleDownloadLater(ActionEvent event) {
         System.out.println("Download Later button clicked.");
         saveTask();
+        downloadTask.start();
     }
 
     @FXML
     private void handleStartDownload(ActionEvent event) {
         System.out.println("Start Download button clicked.");
         saveTask();
+        downloadTask.resume(); // since our initial state is paused
         downloadTask.start();
     }
 

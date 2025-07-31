@@ -43,7 +43,7 @@ public class AddUrlController {
      * This method name must match the onAction attribute in the FXML.
      */
     @FXML
-    private void handleOkAction(ActionEvent event) throws IOException {
+    private void handleOkAction() throws IOException {
         log.info("In Add URL Scene OK button clicked!");
         String potentialUrl = addressTextField.getText();
 
@@ -89,7 +89,7 @@ public class AddUrlController {
      * This method name must match the onAction attribute in the FXML.
      */
     @FXML
-    private void handleCancelAction(ActionEvent event) {
+    private void handleCancelAction() {
         log.info("In Add URL Scene Cancel button clicked!");
         closeDialog();
     }
