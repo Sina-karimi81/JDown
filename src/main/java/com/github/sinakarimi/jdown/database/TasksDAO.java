@@ -259,7 +259,7 @@ public class TasksDAO {
         double progress = resultSet.getDouble("PROGRESSION");
 
         String data = resultSet.getString("DATA");
-        ConcurrentMap<Range, DataSegment> rangeDataSegmentConcurrentMap = mapper.readValue(data, new TypeReference<>() {
+        ConcurrentMap<Range, Boolean> rangeDataSegmentConcurrentMap = mapper.readValue(data, new TypeReference<>() {
         });
 
         result = DownloadTask.builderWithSegment()

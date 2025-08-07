@@ -19,12 +19,14 @@ import lombok.extern.slf4j.Slf4j;
 import java.io.BufferedOutputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.net.URI;
-import java.net.URISyntaxException;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
+import java.io.InputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import java.net.http.HttpResponse;
 import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -33,15 +35,16 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 
-import static com.github.sinakarimi.jdown.common.HttpConstants.GET_METHOD;
 import static com.github.sinakarimi.jdown.common.HttpConstants.RANGE;
 
 @Slf4j
 @EqualsAndHashCode
+//TODO: this class needs to change a way that each download segments becomes a downloadTask not the entire thing.
+// this way we can pause/resume and update the database for efficiently, I think :))
 public class DownloadTask {
 
     @Getter
-    private final ConcurrentMap<Range, DataSegment> segments;
+    private final ConcurrentMap<Range, Boolean> segments;
 
     /**
      * Using property classes makes coding easier since they automatically bind to the values change event,
@@ -70,7 +73,7 @@ public class DownloadTask {
     @Getter
     private SimpleStringProperty descriptionProperty;
 
-    private long completedSegmentSize = 0;
+    private int totalBytesRead = 0;
     private CompletableFuture<Void> downloadTask;
 
     // A Lock implementation
@@ -98,13 +101,13 @@ public class DownloadTask {
         this.isPaused.set(isPaused);
         this.progressProperty = new SimpleDoubleProperty(progress);
         this.descriptionProperty = new SimpleStringProperty(description);
-        completedSegmentSize = (long) ((progress / 100) * sizeProperty.get());
+        totalBytesRead = (int) ((progress / 100) * sizeProperty.get());
         this.segments = new ConcurrentHashMap<>();
     }
 
     // if a different wasn't used, lombok wouldn't recognize the new field
     @Builder(builderMethodName = "builderWithSegment", buildMethodName = "buildWithSegments")
-    public DownloadTask(String name, String type, Status status, Long size, String savePath, String downloadUrl, Boolean resumable, double progress, String description, boolean isPaused, ConcurrentMap<Range, DataSegment> segments) {
+    public DownloadTask(String name, String type, Status status, Long size, String savePath, String downloadUrl, Boolean resumable, double progress, String description, boolean isPaused, ConcurrentMap<Range, Boolean> segments) {
         this.nameProperty = new SimpleStringProperty(name);
         this.type = type;
         this.statusProperty = new SimpleObjectProperty<>(status);
@@ -114,7 +117,7 @@ public class DownloadTask {
         this.resumable = resumable;
         this.isPaused.set(isPaused);
         this.progressProperty = new SimpleDoubleProperty(progress);
-        completedSegmentSize = (long) ((progress / 100) * sizeProperty.get());
+        totalBytesRead = (int) ((progress / 100) * sizeProperty.get());
         this.descriptionProperty = new SimpleStringProperty(description);
         this.segments = segments;
     }
@@ -191,7 +194,7 @@ public class DownloadTask {
             progressProperty.set(progress);
         }
 
-        completedSegmentSize = (long) ((progress / 100) * sizeProperty.get());
+        totalBytesRead = (int) ((progress / 100) * sizeProperty.get());
     }
 
     public void setDescriptionProperty(String description) {
@@ -263,7 +266,7 @@ public class DownloadTask {
         log.info("started to reload unfinished segments...");
         List<Range> notCompletedSegments = segments.entrySet()
                 .stream()
-                .filter(e -> !e.getValue().isComplete())
+                .filter(e -> !e.getValue())
                 .map(Map.Entry::getKey)
                 .toList();
 
@@ -281,12 +284,8 @@ public class DownloadTask {
 
     private void reloadHttpRequests(Range range) {
         try {
-            String rangeValues = createRangeHeader(range);
-
             checkIsPausedCondition();
-
-            HttpResponse<byte[]> send = sendHttpRequest(rangeValues);
-            saveToArray(range, send);
+            sendHttpRequest(range);
         } catch (Exception e) {
             log.error("failed create a request for the given item with name {}!!!", nameProperty.get(), e);
             statusProperty.set(Status.ERROR);
@@ -301,7 +300,7 @@ public class DownloadTask {
         List<Range> ranges = createRanges(sizeProperty.get());
 
         for (Range range: ranges) {
-            CompletableFuture<Void> downloadPartition = createDataSegments(range);
+            CompletableFuture<Void> downloadPartition = createDownloadSegments(range);
             requests.add(downloadPartition);
         }
 
@@ -311,23 +310,10 @@ public class DownloadTask {
         log.info("Finished creating request for {}", nameProperty.get());
     }
 
-    private CompletableFuture<Void> createDataSegments(Range range) {
+    private CompletableFuture<Void> createDownloadSegments(Range range) {
         return CompletableFuture.runAsync(() -> {
-            try {
-                String rangeHeader = createRangeHeader(range);
-
-                int size = range.getTo() - range.getFrom() + 1;
-                segments.put(range, new DataSegment(size));
-
-                checkIsPausedCondition();
-
-                HttpResponse<byte[]> send = sendHttpRequest(rangeHeader);
-                saveToArray(range, send);
-            } catch (Exception e) {
-                log.error("failed create a request for the given item with name {}!!!", nameProperty.get(), e);
-                statusProperty.set(Status.ERROR);
-                throw new DownloadFailedException("Failed to download the requested file: " + nameProperty.get(), e);
-            }
+            segments.put(range, false);
+            sendHttpRequest(range);
         });
     }
 
@@ -359,20 +345,77 @@ public class DownloadTask {
         return rangeValues;
     }
 
-    private HttpResponse<byte[]> sendHttpRequest(String rangeHeader) throws URISyntaxException, IOException, InterruptedException {
-        HttpClient client = HttpClient.newHttpClient();
-        HttpRequest request = HttpRequest
-                .newBuilder(new URI(downloadUrl))
-                .method(GET_METHOD.getValue(), HttpRequest.BodyPublishers.noBody())
-                .header(RANGE.getValue(), rangeHeader)
-                .build();
+    private void sendHttpRequest(Range range) {
+        HttpURLConnection connection = null;
+        PausableInputStream inputStream = null;
+        FileChannel fileChannel = null;
 
-        return client.send(request, HttpResponse.BodyHandlers.ofByteArray());
+        try {
+            checkIsPausedCondition();
+            // Open HTTP connection
+            URL url = new URL(downloadUrl);
+            connection = (HttpURLConnection) url.openConnection();
+            connection.setRequestMethod("GET");
+            // set a header
+            connection.setRequestProperty(RANGE.getValue(), createRangeHeader(range));
+
+            // Check for successful response
+            int responseCode = connection.getResponseCode();
+            if (!HttpUtils.isStatusCode2xx(responseCode)) {
+                throw new IOException("Server returned HTTP response code: " + responseCode);
+            }
+
+            // Open file channel in READ_WRITE mode (create if needed)
+            Path filePath = Path.of(savePath + "/" + nameProperty.get());
+            fileChannel = FileChannel.open(filePath, StandardOpenOption.READ, StandardOpenOption.WRITE, StandardOpenOption.CREATE);
+
+            // Set the file position where writing will start
+            fileChannel.position(range.getFrom());
+
+            // Get input stream from the connection
+            inputStream = new PausableInputStream(connection.getInputStream());
+
+            // Buffer for reading data
+            ByteBuffer buffer = ByteBuffer.allocate(8192); // 8KB buffer
+
+            // Stream data directly to file
+            int bytesRead;
+            while ((bytesRead = inputStream.read(buffer.array())) != -1) {
+                // Prepare buffer for writing
+                buffer.limit(bytesRead);
+                fileChannel.write(buffer);
+                buffer.clear();
+
+                updateProgress(bytesRead);
+            }
+
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        } finally {
+            // Close resources in reverse order of creation
+            if (inputStream != null) {
+                try {
+                    inputStream.close();
+                } catch (IOException e) {
+                    // Log or handle error
+                }
+            }
+            if (fileChannel != null) {
+                try {
+                    fileChannel.close();
+                } catch (IOException e) {
+                    // Log or handle error
+                }
+            }
+            if (connection != null) {
+                connection.disconnect();
+            }
+        }
     }
 
     private CompletableFuture<Void> composeRequests(List<CompletableFuture<Void>> requests) {
         return CompletableFuture.allOf(requests.toArray(CompletableFuture[]::new))
-                .thenAccept(r -> saveToFile())
+                .thenAccept(r -> statusProperty.set(Status.COMPLETED))
                 .exceptionally(ex -> {
                     if (ex != null) {
                         log.error("one of the requests failed to complete!!!", ex);
@@ -400,64 +443,10 @@ public class DownloadTask {
         }
     }
 
-    private void saveToArray(Range range, HttpResponse<byte[]> response) {
-        log.info("saving request range {} with status {} to byte array", range.rangeString(), response.statusCode());
-        if (!HttpUtils.isStatusCode2xx(response)) {
-            String message = String.format("Failed to fetch data for range %s with status code %d", range.rangeString(), response.statusCode());
-            throw new DownloadFailedException(message);
-        }
-
-        byte[] body = response.body();
-        DataSegment dataSegment = segments.get(range);
-        dataSegment.setSegment(body);
-        dataSegment.setComplete(true);
-        segments.put(range, dataSegment);
-        updateProgress(body.length);
-        log.info("finished saving request range {} ", range.rangeString());
-    }
-
-    private void saveToFile() throws DownloadFailedException {
-        log.info("saving download result for item {} into a file in path {}", nameProperty.get(), savePath);
-
-        byte[] bytes = combineDataSegments();
-        try (FileOutputStream outputStream = new FileOutputStream(savePath + "/" + nameProperty.get());
-             BufferedOutputStream writer = new BufferedOutputStream(outputStream)) {
-
-            writer.write(bytes);
-            statusProperty.set(Status.COMPLETED);
-        } catch (Exception e) {
-            log.error("failed to save byte array to file!!!", e);
-            statusProperty.set(Status.ERROR);
-            throw new DownloadFailedException("Failed to write the data into file: " + nameProperty.get(), e);
-        }
-        log.info("finished saving download result for item {} into a file in path {}", nameProperty.get(), savePath);
-    }
-
-    private byte[] combineDataSegments() {
-        int totalLength = 0;
-        List<byte[]> byteArrays = segments.entrySet()
-                .stream()
-                .sorted(Map.Entry.comparingByKey())
-                .map(Map.Entry::getValue)
-                .map(DataSegment::getSegment)
-                .toList();
-
-        for (byte[] byteArray : byteArrays) {
-            totalLength += byteArray.length;
-        }
-
-        ByteBuffer buffer = ByteBuffer.allocate(totalLength);
-
-        for (byte[] byteArray : byteArrays) {
-            buffer.put(byteArray);
-        }
-
-        return buffer.array();
-    }
-
-    private void updateProgress(int segmentSize) {
-        completedSegmentSize += segmentSize;
-        double completedPercentage = ((double) completedSegmentSize / sizeProperty.get()) * 100;
+    private synchronized void updateProgress(int bytesRead) {
+        totalBytesRead += bytesRead;
+        double completedPercentage = (double) (totalBytesRead) / getSize();
+        log.info("Download progress: {}\n", completedPercentage);
         progressProperty.set(completedPercentage);
     }
 

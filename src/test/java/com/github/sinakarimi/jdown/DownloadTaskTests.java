@@ -205,11 +205,10 @@ public class DownloadTaskTests {
         Optional<DownloadTask> itemByKey = dbManager.getTaskByKey(downloadTask.getName());
         assertTrue(itemByKey.isPresent());
         DownloadTask fetchedDownloadTask = itemByKey.get();
-        ConcurrentMap<Range, DataSegment> segments = fetchedDownloadTask.getSegments();
-        Collection<DataSegment> values = segments.values();
+        ConcurrentMap<Range, Boolean> segments = fetchedDownloadTask.getSegments();
+        Collection<Boolean> values = segments.values();
         assertThat(segments).containsAllEntriesOf(downloadTask.getSegments());
-        assertThat(values).extracting(DataSegment::isComplete).allMatch(ic -> ic.equals(Boolean.FALSE));
-        assertThat(values).extracting(DataSegment::getSegment).allMatch(s -> s.length != 0);
+        assertThat(values).allMatch(ic -> ic.equals(Boolean.FALSE));
     }
 
     @Test
