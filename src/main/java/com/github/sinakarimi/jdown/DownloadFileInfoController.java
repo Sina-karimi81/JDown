@@ -1,26 +1,16 @@
 package com.github.sinakarimi.jdown;
 
-import com.github.sinakarimi.jdown.download.DownloadTask;
+import com.github.sinakarimi.jdown.download.Download;
 import com.github.sinakarimi.jdown.download.DownloadTaskManager;
 import com.github.sinakarimi.jdown.exception.FileDataRequestFailedException;
-import javafx.embed.swing.SwingFXUtils;
 import javafx.event.ActionEvent;
 import javafx.fxml.FXML;
-import javafx.scene.SnapshotParameters;
 import javafx.scene.control.Button;
-import javafx.scene.control.CheckBox;
-import javafx.scene.control.TextArea;
 import javafx.scene.control.TextField;
-import javafx.scene.image.Image;
-import javafx.scene.image.ImageView;
-import javafx.scene.image.WritableImage;
 import javafx.stage.DirectoryChooser;
 import javafx.stage.Stage;
 import lombok.extern.slf4j.Slf4j;
-import org.kordamp.ikonli.javafx.FontIcon;
 
-import javax.swing.filechooser.FileSystemView;
-import java.awt.image.BufferedImage;
 import java.io.File;
 import java.nio.file.Paths;
 
@@ -34,7 +24,7 @@ public class DownloadFileInfoController {
     @FXML private TextField descriptionTextField;
     @FXML private TextField nameTextField;
     private DownloadTaskManager downloadTaskManager;
-    private DownloadTask downloadTask = null;
+    private Download downloadTask = null;
 
     /**
      * Initializes the controller class. This method is automatically called
@@ -99,11 +89,11 @@ public class DownloadFileInfoController {
         downloadTask.setSavePath(saveAsTextField.getText());
 
         if (descriptionTextField.getText() != null && !descriptionTextField.getText().isEmpty()) {
-            downloadTask.setDescriptionProperty(descriptionTextField.getText());
+            downloadTask.setDescription(descriptionTextField.getText());
         }
 
         if (nameTextField.getText() != null && !nameTextField.getText().isEmpty()) {
-            downloadTask.setNameProperty(nameTextField.getText());
+            downloadTask.setName(nameTextField.getText());
         }
 
         closeDialog();

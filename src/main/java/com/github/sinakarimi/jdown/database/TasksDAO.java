@@ -4,15 +4,16 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.module.SimpleModule;
-import com.github.sinakarimi.jdown.configuration.ConfigurationConstants;
-import com.github.sinakarimi.jdown.configuration.ConfigurationUtils;
-import com.github.sinakarimi.jdown.dataObjects.DataSegment;
 import com.github.sinakarimi.jdown.dataObjects.Range;
 import com.github.sinakarimi.jdown.dataObjects.Status;
+import com.github.sinakarimi.jdown.download.Download;
 import com.github.sinakarimi.jdown.download.DownloadTask;
 import com.github.sinakarimi.jdown.exception.DatabaseException;
 import com.github.sinakarimi.jdown.serialization.RangeDeserializer;
 import com.github.sinakarimi.jdown.serialization.RangeSerializer;
+import javafx.beans.property.SimpleDoubleProperty;
+import javafx.beans.property.SimpleObjectProperty;
+import javafx.beans.property.SimpleStringProperty;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import lombok.Getter;
@@ -21,7 +22,6 @@ import lombok.extern.slf4j.Slf4j;
 import java.sql.*;
 import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.ConcurrentMap;
 
 @Slf4j
 public class TasksDAO {
@@ -34,7 +34,7 @@ public class TasksDAO {
      * utility class used to create Collection Framework classes. provides the same functionalities
      */
     @Getter
-    private final ObservableList<DownloadTask> tasksList = FXCollections.observableArrayList();
+    private final ObservableList<Download> tasksList = FXCollections.observableArrayList();
 
     public static TasksDAO getInstance(String dbName) {
         if (INSTANCE == null) {
@@ -82,8 +82,8 @@ public class TasksDAO {
         }
     }
 
-    public void insert(DownloadTask downloadTask) {
-        log.info("inserting download task {} into the database", downloadTask.getName());
+    public void insert(Download download) {
+        log.info("inserting download task {} into the database", download.getName());
         String sql = """
                 INSERT INTO TASKS(NAME, TYPE, STATUS, SIZE, SAVEPATH, URL, RESUMABLE, PROGRESSION, DESCRIPTION, DATA) VALUES (? , ? , ? , ? , ? , ? , ? , ? , ? , ?);
                 """;
@@ -91,72 +91,116 @@ public class TasksDAO {
         try (Connection connection = DriverManager.getConnection(DB_URL);
              PreparedStatement ps = connection.prepareStatement(sql)) {
 
-            ps.setString(1, downloadTask.getName());
-            ps.setString(2, downloadTask.getType());
-            ps.setString(3, downloadTask.getStatus().name());
-            ps.setLong(4, downloadTask.getSize());
-            ps.setString(5, downloadTask.getSavePath());
-            ps.setString(6, downloadTask.getDownloadUrl());
-            ps.setBoolean(7, downloadTask.getResumable());
-            ps.setDouble(8, downloadTask.getProgress());
-            ps.setString(9, downloadTask.getDescription());
-            String data = mapper.writeValueAsString(downloadTask.getSegments());
+            ps.setString(1, download.getName());
+            ps.setString(2, download.getType());
+            ps.setString(3, download.getStatusProperty().get().name());
+            ps.setLong(4, download.getSize());
+            ps.setString(5, download.getSavePath());
+            ps.setString(6, download.getDownloadUrl());
+            ps.setBoolean(7, download.getResumable());
+            ps.setDouble(8, 0);
+
+            // to avoid further exceptions
+            String valueSafe = download.getDescriptionProperty() != null ? download.getDescriptionProperty().getValueSafe() : "";
+            ps.setString(9, valueSafe);
+
+            String data = mapper.writeValueAsString(download.getDownloadTasks());
             ps.setString(10, data);
 
             int i = ps.executeUpdate();
-            log.info("{} record inserted for task {}", i, downloadTask.getName());
+            log.info("{} record inserted for task {}", i, download.getName());
 
-            tasksList.add(downloadTask);
+            tasksList.add(download);
         } catch (Exception e) {
-            log.error("failed to insert download task {} in to the database", downloadTask, e);
+            log.error("failed to insert download task {} in to the database", download, e);
             throw new DatabaseException("failed to insert a download task in to the database", e);
         }
     }
 
-    public void insertAll(List<DownloadTask> downloadTasks) {
-        for (DownloadTask downloadTask: downloadTasks) {
-            insert(downloadTask);
+    public void insertAll(List<Download> downloads) {
+        for (Download download: downloads) {
+            insert(download);
         }
     }
 
-    public void update(String pk, DownloadTask downloadTask) {
-        log.info("updating task {} into the database", downloadTask.getName());
+    public void updateStatus(String pk, Status status) {
+        log.info("updating status of task with pk {} into the database", pk);
         String sql = """
-                UPDATE TASKS SET NAME = ?, TYPE = ? , STATUS = ? , SIZE = ? , SAVEPATH = ? , URL = ? , RESUMABLE = ? , DATA = ? , DESCRIPTION = ? , PROGRESSION = ? WHERE NAME = ?;
+                UPDATE TASKS SET STATUS = ? WHERE NAME = ?;
                 """;
 
         try (Connection connection = DriverManager.getConnection(DB_URL);
              PreparedStatement ps = connection.prepareStatement(sql)) {
 
-            ps.setString(1, downloadTask.getName());
-            ps.setString(2, downloadTask.getType());
-            ps.setString(3, downloadTask.getStatus().name());
-            ps.setLong(4, downloadTask.getSize());
-            ps.setString(5, downloadTask.getSavePath());
-            ps.setString(6, downloadTask.getDownloadUrl());
-            ps.setBoolean(7, downloadTask.getResumable());
-            String data = mapper.writeValueAsString(downloadTask.getSegments());
-            ps.setString(8, data);
-            ps.setString(9, downloadTask.getDescription());
-            ps.setDouble(10, downloadTask.getProgress());
-            ps.setString(11, pk);
+            ps.setString(1, status.getValue());
+            ps.setString(2, pk);
 
             int i = ps.executeUpdate();
 
-            int indexToUpdate = -1;
-            for (int idx = 0; idx < tasksList.size(); idx++) {
-                if (tasksList.get(idx).getName().equals(pk)) {
-                    indexToUpdate = idx;
-                    break;
+            for (Download download : tasksList) {
+                if (download.getName().equals(pk)) {
+                    download.setStatus(status);
                 }
             }
 
-            tasksList.set(indexToUpdate, downloadTask);
-
-            log.info("{} record updated for task {}", i, downloadTask.getName());
+            log.info("{} record updated for task with pk {}", i, pk);
         } catch (Exception e) {
-            log.error("failed to insert task {} in to the database", downloadTask, e);
-            throw new DatabaseException("failed to insert an task in to the database", e);
+            log.error("failed to update task with id {} in to the database", pk, e);
+            throw new DatabaseException("failed to update a task in to the database", e);
+        }
+    }
+
+    public void updateDescription(String pk, String description) {
+        log.info("updating description of task with pk {} into the database", pk);
+        String sql = """
+                UPDATE TASKS SET DESCRIPTION = ? WHERE NAME = ?;
+                """;
+
+        try (Connection connection = DriverManager.getConnection(DB_URL);
+             PreparedStatement ps = connection.prepareStatement(sql)) {
+
+            ps.setString(1, description);
+            ps.setString(2, pk);
+
+            int i = ps.executeUpdate();
+
+            for (Download download : tasksList) {
+                if (download.getName().equals(pk)) {
+                    download.setDescription(description);
+                }
+            }
+
+            log.info("{} record updated for task with pk {}", i, pk);
+        } catch (Exception e) {
+            log.error("failed to update task with id {} in to the database", pk, e);
+            throw new DatabaseException("failed to update a task in to the database", e);
+        }
+    }
+
+    public void updateProgression(String pk, double progression) {
+        log.info("updating progression of task with pk {} into the database", pk);
+        String sql = """
+                UPDATE TASKS SET PROGRESSION = ? WHERE NAME = ?;
+                """;
+
+        try (Connection connection = DriverManager.getConnection(DB_URL);
+             PreparedStatement ps = connection.prepareStatement(sql)) {
+
+            ps.setDouble(1, progression);
+            ps.setString(2, pk);
+
+            int i = ps.executeUpdate();
+
+            for (Download download : tasksList) {
+                if (download.getName().equals(pk)) {
+                    download.setProgress(progression);
+                }
+            }
+
+            log.info("{} record updated for task with pk {}", i, pk);
+        } catch (Exception e) {
+            log.error("failed to update task with id {} in to the database", pk, e);
+            throw new DatabaseException("failed to update a task in to the database", e);
         }
     }
 
@@ -208,9 +252,9 @@ public class TasksDAO {
 
             ResultSet resultSet = ps.executeQuery();
             while (resultSet.next()) {
-                DownloadTask downloadTask = getDownloadTask(resultSet);
-                downloadTask.reloadSegments();
-                tasksList.add(downloadTask);
+                Download download = getDownloadTask(resultSet);
+                download.reloadSegments();
+                tasksList.add(download);
             }
 
             log.info("finished getting all tasks from the database, number of records fetched: {}", tasksList.size());
@@ -220,9 +264,9 @@ public class TasksDAO {
         }
     }
 
-    public Optional<DownloadTask> getTaskByKey(String key) {
+    public Optional<Download> getTaskByKey(String key) {
         log.info("getting a specific task with name {} from database", key);
-        DownloadTask result = null;
+        Download result = null;
 
         String sql = """
                 SELECT * FROM TASKS WHERE NAME = ?
@@ -246,8 +290,8 @@ public class TasksDAO {
         }
     }
 
-    private DownloadTask getDownloadTask(ResultSet resultSet) throws SQLException, JsonProcessingException {
-        DownloadTask result;
+    private Download getDownloadTask(ResultSet resultSet) throws SQLException, JsonProcessingException {
+        Download result;
         String name = resultSet.getString("NAME");
         String type = resultSet.getString("TYPE");
         String status = resultSet.getString("STATUS");
@@ -259,22 +303,20 @@ public class TasksDAO {
         double progress = resultSet.getDouble("PROGRESSION");
 
         String data = resultSet.getString("DATA");
-        ConcurrentMap<Range, Boolean> rangeDataSegmentConcurrentMap = mapper.readValue(data, new TypeReference<>() {
-        });
+        List<DownloadTask> downloadTasks = mapper.readValue(data, new TypeReference<>() {});
 
-        result = DownloadTask.builderWithSegment()
+        result = Download.builder()
                 .name(name)
                 .type(type)
-                .status(Status.valueOf(status))
+                .statusProperty(new SimpleObjectProperty<>(Status.valueOf(status)))
                 .size(size)
                 .savePath(savePath)
                 .downloadUrl(url)
                 .resumable(resumable == 1)
-                .isPaused(true)
-                .description(description)
-                .progress(progress)
-                .segments(rangeDataSegmentConcurrentMap)
-                .buildWithSegments();
+                .descriptionProperty(new SimpleStringProperty(description))
+                .progressProperty(new SimpleDoubleProperty(progress))
+                .downloadTasks(downloadTasks)
+                .build();
         return result;
     }
 

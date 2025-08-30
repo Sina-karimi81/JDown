@@ -1,13 +1,10 @@
 package com.github.sinakarimi.jdown;
 
 import com.github.sinakarimi.jdown.dataObjects.Status;
-import com.github.sinakarimi.jdown.download.DownloadTask;
+import com.github.sinakarimi.jdown.download.Download;
 import com.github.sinakarimi.jdown.download.DownloadTaskManager;
 import javafx.collections.ObservableList;
 import javafx.event.ActionEvent;
-import javafx.event.Event;
-import javafx.event.EventHandler;
-import javafx.event.EventType;
 import javafx.fxml.FXML;
 import javafx.fxml.FXMLLoader;
 import javafx.scene.Parent;
@@ -18,7 +15,6 @@ import javafx.stage.Modality;
 import javafx.stage.Stage;
 import lombok.extern.slf4j.Slf4j;
 
-import java.awt.event.MouseEvent;
 import java.io.IOException;
 
 @Slf4j
@@ -26,20 +22,20 @@ public class DownloadManagerController {
 
     // The table that displays the download tasks. The fx:id in the FXML file must match this variable name.
     @FXML
-    private TableView<DownloadTask> downloadsTable;
+    private TableView<Download> downloadsTable;
 
     // Table columns that will be populated with data from DownloadTask objects.
     @FXML
-    private TableColumn<DownloadTask, String> nameColumn;
+    private TableColumn<Download, String> nameColumn;
 
     @FXML
-    private TableColumn<DownloadTask, Long> sizeColumn;
+    private TableColumn<Download, Long> sizeColumn;
 
     @FXML
-    private TableColumn<DownloadTask, Status> statusColumn;
+    private TableColumn<Download, Status> statusColumn;
 
     @FXML
-    private TableColumn<DownloadTask, Double> progressColumn;
+    private TableColumn<Download, Double> progressColumn;
 
     @FXML
     private Button resumeButton;
@@ -67,12 +63,10 @@ public class DownloadManagerController {
     private void setupTableCellFactories() {
         // Set up the cell value factories for each column.
         // This tells the table how to get the data for each cell from the DownloadTask object.
-        nameColumn.setCellValueFactory(cellData -> cellData.getValue().getNameProperty());
-        sizeColumn.setCellValueFactory(cellData -> cellData.getValue().getSizeProperty().asObject());
         statusColumn.setCellValueFactory(cellData -> cellData.getValue().getStatusProperty());
-
         // For the progress column, we want to display a progress bar.
         progressColumn.setCellValueFactory(cellData -> cellData.getValue().getProgressProperty().asObject());
+
         progressColumn.setCellFactory(ProgressBarTableCell.forTableColumn());
     }
 
@@ -83,14 +77,14 @@ public class DownloadManagerController {
         // items in the context menu
         MenuItem delete = new MenuItem("delete");
         delete.setOnAction(event -> {
-            DownloadTask selectedItem = downloadsTable.getSelectionModel().getSelectedItem();
+            Download selectedItem = downloadsTable.getSelectionModel().getSelectedItem();
             downloadsTable.getItems().remove(selectedItem);
             downloadTaskManager.deleteTask(selectedItem);
         });
 
         MenuItem properties = new MenuItem("properties");
         properties.setOnAction(event -> {
-            DownloadTask selectedItem = downloadsTable.getSelectionModel().getSelectedItem();
+            Download selectedItem = downloadsTable.getSelectionModel().getSelectedItem();
             handlePropertiesContextAction(selectedItem);
         });
 
@@ -109,11 +103,11 @@ public class DownloadManagerController {
     }
 
     private void fetchTasks() {
-        ObservableList<DownloadTask> downloadTasks = downloadTaskManager.listAllDownloadTasks();
+        ObservableList<Download> downloadTasks = downloadTaskManager.listAllDownloadTasks();
         downloadsTable.setItems(downloadTasks);
     }
 
-    private void handlePropertiesContextAction(DownloadTask task) {
+    private void handlePropertiesContextAction(Download task) {
         log.info("properties called on {}", task.getName());
         FXMLLoader fxmlLoader = new FXMLLoader(getClass().getResource("FilePropertiesView.fxml"));
         Parent root;
@@ -169,7 +163,7 @@ public class DownloadManagerController {
     @FXML
     private void handleResumeAction() {
         log.info("Resume button clicked!");
-        DownloadTask selectedItem = downloadsTable.getSelectionModel().getSelectedItem();
+        Download selectedItem = downloadsTable.getSelectionModel().getSelectedItem();
         selectedItem.resume();
     }
 
@@ -179,7 +173,7 @@ public class DownloadManagerController {
     @FXML
     private void handlePauseAction() {
         log.info("Pause button clicked!");
-        DownloadTask selectedItem = downloadsTable.getSelectionModel().getSelectedItem();
+        Download selectedItem = downloadsTable.getSelectionModel().getSelectedItem();
         selectedItem.pause();
     }
 
@@ -189,7 +183,7 @@ public class DownloadManagerController {
     @FXML
     private void handlePauseAllAction() {
         log.info("Pause All button clicked!");
-        downloadsTable.getItems().forEach(DownloadTask::pause);
+        downloadsTable.getItems().forEach(Download::pause);
     }
 
     /**
@@ -198,7 +192,7 @@ public class DownloadManagerController {
     @FXML
     private void handleCancelAction() {
         log.info("Cancel button clicked!");
-        DownloadTask selectedItem = downloadsTable.getSelectionModel().getSelectedItem();
+        Download selectedItem = downloadsTable.getSelectionModel().getSelectedItem();
         selectedItem.cancel();
     }
 

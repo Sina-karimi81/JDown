@@ -33,8 +33,10 @@ public class DownloadTaskManager {
         return INSTANCE;
     }
 
-    public DownloadTask createTask(String url, String savedAddress) throws FileDataRequestFailedException {
-        DownloadTask downloadTask = new DownloadTask();
+    public Download createTask(String url, String savedAddress) throws FileDataRequestFailedException {
+        Download downloadTask = Download.builder()
+                .tasksDAO(dbManger)
+                .build();
         downloadTask.setDownloadUrl(url);
         Optional<HttpResponse<Void>> itemData = getItemData(url);
 
@@ -54,7 +56,7 @@ public class DownloadTaskManager {
 
             List<String> contentLength = headers.get(CONTENT_LENGTH_HEADER.getValue());
             if (contentLength != null && !contentLength.isEmpty()) {
-                downloadTask.setSizeProperty(Long.valueOf(contentLength.get(0)));
+                downloadTask.setSize(Long.valueOf(contentLength.get(0)));
             }
 
             List<String> contentType = headers.get(CONTENT_TYPE_HEADER.getValue());
@@ -63,16 +65,16 @@ public class DownloadTaskManager {
             }
 
             String fileName = getFileName(url, headers);
-            downloadTask.setNameProperty(fileName);
-            downloadTask.setStatusProperty(Status.PAUSED);
+            downloadTask.setName(fileName);
+            downloadTask.setStatus(Status.PAUSED);
             downloadTask.setSavePath(savedAddress);
         }
 
         return downloadTask;
     }
 
-    public void saveTask(DownloadTask downloadTask) {
-        dbManger.insert(downloadTask);
+    public void saveTask(Download download) {
+        dbManger.insert(download);
     }
 
     private String getFileName(String url, Map<String, List<String>> headers) {
@@ -104,12 +106,12 @@ public class DownloadTaskManager {
         return Optional.ofNullable(response);
     }
 
-    public ObservableList<DownloadTask> listAllDownloadTasks() {
+    public ObservableList<Download> listAllDownloadTasks() {
         dbManger.loadAllTasks();
         return dbManger.getTasksList();
     }
 
-    public void deleteTask(DownloadTask task) {
+    public void deleteTask(Download task) {
         dbManger.delete(task.getName());
     }
 

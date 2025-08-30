@@ -1,8 +1,13 @@
 package com.github.sinakarimi.jdown;
 
+import com.github.sinakarimi.jdown.dataObjects.Range;
 import com.github.sinakarimi.jdown.dataObjects.Status;
 import com.github.sinakarimi.jdown.database.TasksDAO;
+import com.github.sinakarimi.jdown.download.Download;
 import com.github.sinakarimi.jdown.download.DownloadTask;
+import javafx.beans.property.ObjectProperty;
+import javafx.beans.property.SimpleObjectProperty;
+import javafx.beans.property.SimpleStringProperty;
 import javafx.collections.ObservableList;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -22,37 +27,49 @@ public class TasksDAOTests {
 
     @BeforeEach()
     public void setup() {
-        DownloadTask downloadTask1 = DownloadTask.builder()
+        DownloadTask $1 = new DownloadTask(Range.valueOf("0_2"), null, null);
+        DownloadTask $2 = new DownloadTask(Range.valueOf("0_2"), null, null);
+        DownloadTask $3 = new DownloadTask(Range.valueOf("0_2"), null, null);
+
+        List<DownloadTask> tasks = List.of($1, $2, $3);
+
+        Download downloadTask1 = Download.builder()
                 .name("ITEM1")
                 .type("BINARY")
-                .status(Status.PAUSED)
+                .statusProperty(new SimpleObjectProperty<>(Status.PAUSED))
                 .size(80L)
                 .savePath("opt/test/test")
                 .downloadUrl("localhost:9090")
                 .resumable(true)
+                .descriptionProperty(new SimpleStringProperty("test-1"))
+                .downloadTasks(tasks)
                 .build();
 
-        DownloadTask downloadTask2 = DownloadTask.builder()
+        Download downloadTask2 = Download.builder()
                 .name("ITEM2")
                 .type("TEXT")
-                .status(Status.ERROR)
+                .statusProperty(new SimpleObjectProperty<>(Status.ERROR))
                 .size(80L)
                 .savePath("opt/test/test")
                 .downloadUrl("localhost:9090")
                 .resumable(true)
+                .descriptionProperty(new SimpleStringProperty("test-2"))
+                .downloadTasks(tasks)
                 .build();
 
-        DownloadTask downloadTask3 = DownloadTask.builder()
+        Download downloadTask3 = Download.builder()
                 .name("ITEM3")
                 .type("IMAGE")
-                .status(Status.CANCELED)
+                .statusProperty(new SimpleObjectProperty<>(Status.CANCELED))
                 .size(80L)
                 .savePath("opt/test/test")
                 .downloadUrl("localhost:9090")
                 .resumable(true)
+                .descriptionProperty(new SimpleStringProperty("test-3"))
+                .downloadTasks(tasks)
                 .build();
 
-        List<DownloadTask> downloadTasks = List.of(downloadTask1, downloadTask2, downloadTask3);
+        List<Download> downloadTasks = List.of(downloadTask1, downloadTask2, downloadTask3);
         manager.insertAll(downloadTasks);
     }
     
@@ -64,63 +81,70 @@ public class TasksDAOTests {
     @Test
     void fetchAllData() {
         // since we are inserting data before each test, to make it consistent we have to clear the tasksList
-        ObservableList<DownloadTask> allItems = manager.getTasksList();
+        ObservableList<Download> allItems = manager.getTasksList();
         allItems.clear();
 
         manager.loadAllTasks();
         allItems = manager.getTasksList();
-        assertThat(allItems).extracting(DownloadTask::getName).containsExactly("ITEM1", "ITEM2", "ITEM3");
-        assertThat(allItems).extracting(DownloadTask::getStatus).containsExactly(Status.PAUSED, Status.ERROR, Status.CANCELED);
+
+        assertThat(allItems).extracting(Download::getName)
+                .containsExactly("ITEM1", "ITEM2", "ITEM3");
+
+        assertThat(allItems).extracting(Download::getStatusProperty)
+                .extracting(ObjectProperty::get)
+                .containsExactly(Status.PAUSED, Status.ERROR, Status.CANCELED);
+
         System.out.println(allItems);
     }
 
     @Test
     void insertNewItem() {
-        DownloadTask downloadTask = DownloadTask.builder()
+        Download downloadTask = Download.builder()
                 .name("item4")
                 .type("video")
-                .status(Status.COMPLETED)
+                .statusProperty(new SimpleObjectProperty<>(Status.COMPLETED))
                 .size(72L)
                 .savePath("opt/test/test")
                 .downloadUrl("localhost:9090")
                 .resumable(false)
+                .descriptionProperty(new SimpleStringProperty("this is a test"))
                 .build();
 
         assertDoesNotThrow(() -> manager.insert(downloadTask));
-        ObservableList<DownloadTask> allItems = manager.getTasksList();
+        ObservableList<Download> allItems = manager.getTasksList();
         assertEquals(4, allItems.size());
     }
 
     @Test
     void deleteFromDatabase() {
-        ObservableList<DownloadTask> allItems = manager.getTasksList();
+        ObservableList<Download> allItems = manager.getTasksList();
 
         String key = allItems.get(0).getName();
         assertDoesNotThrow(() -> manager.delete(key));
 
-        ObservableList<DownloadTask> allItemsAfterDelete = manager.getTasksList();
+        ObservableList<Download> allItemsAfterDelete = manager.getTasksList();
         assertEquals(2, allItemsAfterDelete.size());
-        assertThat(allItemsAfterDelete).extracting(DownloadTask::getName).doesNotContain(key);
+        assertThat(allItemsAfterDelete).extracting(Download::getName).doesNotContain(key);
     }
 
     @Test
     void updateAnItem() {
         manager.loadAllTasks();
-        ObservableList<DownloadTask> allItems = manager.getTasksList();
-        DownloadTask downloadTask = allItems.get(0);
+        ObservableList<Download> allItems = manager.getTasksList();
+        Download downloadTask = allItems.get(0);
 
         String pk = downloadTask.getName();
 
-        String oldValue = downloadTask.getSavePath();
-        String newValue = "opt/sina/test/";
+        String oldValue = downloadTask.getDescriptionProperty().get();
+        String newValue = "this is a test";
         downloadTask.setSavePath(newValue);
 
-        assertDoesNotThrow(() -> manager.update(pk, downloadTask));
+        assertDoesNotThrow(() -> manager.updateDescription(pk, newValue));
         manager.loadAllTasks();
-        ObservableList<DownloadTask> allItemsAfterUpdate = manager.getTasksList();
-        DownloadTask newDownloadTask = allItemsAfterUpdate.get(0);
-        assertNotEquals(oldValue, newDownloadTask.getSavePath());
-        assertEquals(newValue, newDownloadTask.getSavePath());
+        ObservableList<Download> allItemsAfterUpdate = manager.getTasksList();
+        Download newDownloadTask = allItemsAfterUpdate.get(0);
+        assertNotEquals(oldValue, newDownloadTask.getDescriptionProperty().get());
+        assertEquals(newValue, newDownloadTask.getDescriptionProperty().get());
         assertEquals(downloadTask.getName(), newDownloadTask.getName());
     }
 }
